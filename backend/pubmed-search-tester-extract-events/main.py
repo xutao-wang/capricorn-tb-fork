@@ -47,9 +47,10 @@ def extract_events(request):
             )
         ]
 
-        # Configure Gemini model
-        model = "gemini-2.5-pro"
-        tools = [types.Tool(google_search=types.GoogleSearch())]
+        # Configure Gemini model. Extraction is pure reading comprehension of the
+        # case notes — no external lookup needed — so no Google Search grounding.
+        # flash-lite is fast and fully sufficient for this task.
+        model = "gemini-3.1-flash-lite-preview"
         generate_content_config = types.GenerateContentConfig(
             temperature=1,
             top_p=0.95,
@@ -74,7 +75,6 @@ def extract_events(request):
                     threshold="OFF"
                 )
             ],
-            tools=tools,
         )
 
         # Generate response using Gemini
