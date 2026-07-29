@@ -1,0 +1,151 @@
+{
+  "id": "gastroenterology",
+  "label": "Gastroenterology",
+  "description": "Gastrointestinal and hepatic conditions, including inflammatory bowel disease, hereditary GI cancer syndromes, and liver disease, with a focus on genetic variants and endoscopic/serologic findings.",
+
+  "personaTitle": "gastroenterologist",
+  "boardName": null,
+
+  "diseaseExtraction": {
+    "guidance": null,
+    "fewShotExamples": [
+      {
+        "input": "34-year-old man with Crohn's disease, ileal involvement, NOD2 variant positive, steroid-dependent...",
+        "output": "Crohn's disease"
+      },
+      {
+        "input": "50-year-old woman with Lynch syndrome, MLH1 mutation, newly diagnosed colorectal cancer...",
+        "output": "Lynch syndrome-associated colorectal cancer"
+      },
+      {
+        "input": "45-year-old man with cirrhosis secondary to NASH, MELD score 18, evaluated for transplant...",
+        "output": "Cirrhosis secondary to NASH"
+      }
+    ]
+  },
+
+  "eventExtraction": {
+    "categoryIntro": "Extract all clinically relevant and actionable events in the following categories:",
+    "categories": [
+      {
+        "name": "Genetic variants",
+        "block": "**Category 1 — Genetic variants (ALWAYS include the variant type):**\nDo NOT output a bare gene name. ALWAYS append the variant type.\nExamples: \"NOD2 variant\", \"MLH1 mutation\", \"MSH2 mutation\", \"PNPLA3 variant\""
+      },
+      {
+        "name": "Endoscopic / histologic findings",
+        "block": "**Category 2 — Endoscopic / histologic findings:**\n\"ileal ulceration\", \"villous atrophy\", \"Barrett's esophagus\""
+      },
+      {
+        "name": "Lab / serologic markers",
+        "block": "**Category 3 — Lab / serologic markers:**\n\"elevated fecal calprotectin\", \"positive anti-TTG antibody\", \"elevated ALT\""
+      },
+      {
+        "name": "Microbiome / infectious findings",
+        "block": "**Category 4 — Microbiome / infectious findings:**\n\"H. pylori positive\", \"C. difficile positive\""
+      }
+    ],
+    "postCategoryNotes": [
+      "Focus on information that is directly relevant to potential therapy selection or clinical management. Avoid vague or redundant information like \"tolerating oral diet\".",
+      "CRITICAL: For genetic events, NEVER emit just a gene name (e.g., \"NOD2\"). ALWAYS include the variant type (e.g., \"NOD2 variant\"). A bare gene name is not an actionable event — the variant type determines whether it is clinically significant."
+    ],
+    "fewShotExample": {
+      "caseNoteInput": "34-year-old man with a 5-year history of steroid-dependent Crohn's disease, ileal involvement. Colonoscopy shows ileal ulceration. Fecal calprotectin is markedly elevated. Genetic testing reveals a NOD2 variant. Currently being evaluated for biologic therapy.",
+      "expectedOutput": "\"NOD2 variant\" \"ileal ulceration\" \"elevated fecal calprotectin\""
+    },
+    "guidanceNotes": [
+      "**Focus on Actionable Events:** We are not trying to summarize the case but to find what information is relevant to decision-making. This helps filter noise and focus on clinically significant findings.",
+      "**Prioritization:** Prioritizing genotype- and biomarker-driven studies ensures searches are matched to the patient's specific GI condition.",
+      "**Specific Search Terms:** Using exact terms such as \"NOD2 variant\" is essential for precision. Adding \"therapy\", \"treatment\" or \"clinical trials\" helps to find relevant studies.",
+      "**Combinations:** Combining genetic and endoscopic/serologic features allows for refined searches that might be more relevant to the patient.",
+      "**Iteration:** If initial search results are not helpful, we can modify and refine the queries based on the available data."
+    ]
+  },
+
+  "articleScoring": {
+    "evaluationGoal": "evaluate full research articles related to gastroenterology and hepatology, especially those concerning genetic or inflammatory GI conditions, to identify potential advancements in treatment and understanding of the disease",
+    "domainFilterField": {
+      "key": "gi_focus",
+      "label": "GI Focus",
+      "description": "Whether the article relates to a gastrointestinal or hepatic condition"
+    },
+    "perMatchedEventPoints": 15,
+    "journalImpactMultiplier": 5,
+    "journalImpactCap": 25,
+    "yearDecayRate": 5,
+    "clinicalTrialBonus": 40,
+    "reviewPenalty": 5,
+    "citationImpactMultiplier": 5,
+    "citationImpactCap": 25,
+    "fields": [
+      {
+        "key": "disease_match",
+        "label": "Disease Match",
+        "points": 50,
+        "description": "Set to true if the article's disease focus matches the patient's disease. Articles that cover the exact condition in question receive significant points.",
+        "optional": false
+      },
+      {
+        "key": "drugs_tested",
+        "label": "Drugs Tested",
+        "points": 5,
+        "description": "Whether any drugs are mentioned as tested",
+        "optional": false
+      },
+      {
+        "key": "treatment_shown",
+        "label": "Treatment Results",
+        "points": 50,
+        "description": "Set to true if the article demonstrates positive treatment results",
+        "optional": false
+      },
+      {
+        "key": "cell_studies",
+        "label": "Cell Studies",
+        "points": 5,
+        "description": "Whether drugs were tested on cells in vitro",
+        "optional": false
+      },
+      {
+        "key": "mice_studies",
+        "label": "Animal Model Studies",
+        "points": 10,
+        "description": "Whether drugs were tested in animal models",
+        "optional": false
+      },
+      {
+        "key": "case_report",
+        "label": "Case Report",
+        "points": 5,
+        "description": "Whether the article presents a case report",
+        "optional": false
+      },
+      {
+        "key": "series_of_case_reports",
+        "label": "Series of Case Reports",
+        "points": 10,
+        "description": "Whether the article presents multiple case reports",
+        "optional": false
+      },
+      {
+        "key": "clinical_study",
+        "label": "Clinical Study",
+        "points": 15,
+        "description": "Whether the article describes a clinical study",
+        "optional": false
+      },
+      {
+        "key": "novelty",
+        "label": "Novelty",
+        "points": 10,
+        "description": "If the paper describes a novel mechanism or therapeutic strategy",
+        "optional": false
+      }
+    ]
+  },
+
+  "finalAnalysis": {
+    "personaRole": "gastroenterologist"
+  },
+
+  "chatContextLabel": "gastroenterology case involving a genetic or inflammatory GI condition"
+}

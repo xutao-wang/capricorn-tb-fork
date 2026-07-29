@@ -17,7 +17,7 @@ import { handleSendMessage } from './chat/messageHandlers';
 import { initializeActiveChat, initializeNewChat, handleChatSelect } from './chat/chatState';
 import { deleteChat } from '../firebase';
 
-const useChat = (user, selectedTemplate) => {
+const useChat = (user, selectedSpecialtyId) => {
   // Use authenticated user ID (regular or anonymous)
   const userId = user?.uid;
   const [chatHistory, setChatHistory] = useState([]);
@@ -83,10 +83,10 @@ const useChat = (user, selectedTemplate) => {
       setIsLoadingDocs,
       isLoadingAnalysis,
       setIsLoadingAnalysis,
-      selectedTemplate,
-      userId
+      userId,
+      selectedSpecialtyId
     });
-  }, [message, isLoadingDocs, isLoadingAnalysis, activeChat, user, selectedTemplate]);
+  }, [message, isLoadingDocs, isLoadingAnalysis, activeChat, user, selectedSpecialtyId]);
 
   return {
     chatHistory,

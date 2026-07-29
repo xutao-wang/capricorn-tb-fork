@@ -3,8 +3,41 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /chats/{userId}/conversations/{conversationId} {
-      allow read, write: if (request.auth != null && request.auth.uid == userId) || 
+      allow read, write: if (request.auth != null && request.auth.uid == userId) ||
                            (request.auth != null && request.auth.uid.matches('anonymous.*') && userId == request.auth.uid);
+    }
+
+    // Specialty personas: any signed-in user (including anonymous) can view the
+    // available specialties, but only users signed in with a real Google
+    // account (not anonymous) can create or edit one -- these documents feed
+    // directly into system-level prompts sent to Gemini, so anonymous write
+    // access would be a prompt-injection / abuse risk. Updates are allowed
+    // (doctors can edit personas, including curated and auto-generated ones,
+    // from the Specialists panel) but every edit must be paired with a
+    // history snapshot write (see /specialties/{id}/history below) so
+    // changes are attributable and revertible -- see docs/persona-generation-plan.md.
+    match /specialties/{specialtyId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null &&
+                       request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    // Immutable audit trail of prior versions of a specialty doc, written
+    // right before each update. No update/delete -- once written, a history
+    // snapshot cannot be altered.
+    match /specialties/{specialtyId}/history/{historyId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null &&
+                       request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    // Named evidence-weight presets, private to the doctor who saved them.
+    // Anonymous users are excluded (same rationale as specialty edits --
+    // there's no durable identity to scope persistence to across sessions).
+    match /users/{userId}/weightPresets/{presetId} {
+      allow read, write: if request.auth != null &&
+                             request.auth.uid == userId &&
+                             request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
   }
 }

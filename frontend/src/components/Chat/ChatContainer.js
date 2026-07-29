@@ -21,6 +21,8 @@ import ReactMarkdown from 'react-markdown';
 import ArticleResults from '../MainPanel/ArticleResults';
 import ExtractionSection from '../MainPanel/ExtractionSection';
 import AnalysisSection from '../MainPanel/AnalysisSection';
+import EvidenceWeightsReview from '../EvidenceWeightsReview';
+import WeightsSummaryBox from '../WeightsSummaryBox';
 import ChatInput from '../ChatInput';
 import CopyButton from '../CopyButton';
 import PrintButton from '../PrintButton';
@@ -53,14 +55,17 @@ const ChatContainer = ({
   extractedEvents,
   setExtractedDisease,
   setExtractedEvents,
+  detectedSpecialty,
+  detectedSpecialtyConfig,
+  weightsConfirmed,
+  weightOverrides,
+  onConfirmWeights,
   isRetrieving,
   handleRetrieve,
   isBox3Hovered,
   setIsBox3Hovered,
   isPromptExpanded,
   setIsPromptExpanded,
-  promptContent,
-  setPromptContent,
   numArticles,
   setNumArticles,
   chatInputHeight,
@@ -163,10 +168,27 @@ const ChatContainer = ({
                             extractedEvents={extractedEvents}
                             setExtractedDisease={setExtractedDisease}
                             setExtractedEvents={setExtractedEvents}
+                            detectedSpecialty={detectedSpecialty}
                             onExtractionComplete={onExtractionComplete}
                             className={showExtractionSection ? 'opacity-100' : 'opacity-0'}
                           />
                         </div>
+                        {detectedSpecialtyConfig && !weightsConfirmed && (
+                          <div className="mb-4">
+                            <EvidenceWeightsReview
+                              specialty={detectedSpecialtyConfig}
+                              onContinue={onConfirmWeights}
+                            />
+                          </div>
+                        )}
+                        {detectedSpecialtyConfig && weightsConfirmed && weightOverrides && (
+                          <div className="mb-4">
+                            <WeightsSummaryBox
+                              specialty={detectedSpecialtyConfig}
+                              weights={weightOverrides}
+                            />
+                          </div>
+                        )}
                         <div className="mb-4">
                           <AnalysisSection
                             extractedDisease={extractedDisease}
@@ -177,8 +199,6 @@ const ChatContainer = ({
                             setIsBox3Hovered={setIsBox3Hovered}
                             isPromptExpanded={isPromptExpanded}
                             setIsPromptExpanded={setIsPromptExpanded}
-                            promptContent={promptContent}
-                            setPromptContent={setPromptContent}
                             currentProgress={currentProgress}
                             numArticles={numArticles}
                             setNumArticles={setNumArticles}

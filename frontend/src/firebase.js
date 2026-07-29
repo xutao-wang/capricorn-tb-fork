@@ -15,19 +15,21 @@
 // src/firebase.js
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
-import { 
-  getFirestore, 
-  collection, 
-  addDoc, 
-  query, 
-  where, 
-  orderBy, 
-  getDocs, 
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  getDocs,
   updateDoc,
-  deleteDoc, 
+  deleteDoc,
   doc,
   getDoc,
-  onSnapshot
+  setDoc,
+  onSnapshot,
+  serverTimestamp
 } from 'firebase/firestore';
 
 // Your Firebase configuration object
@@ -158,6 +160,112 @@ export const getChatDocumentsRealTime = (userId, callback) => {
   }, (error) => {
     console.error("Error getting real-time chat documents:", error);
   });
+};
+
+// Specialty personas -- see docs/persona-system-plan.md at the repo root
+export const getSpecialties = async () => {
+  try {
+    const specialtiesRef = collection(db, 'specialties');
+    const querySnapshot = await getDocs(specialtiesRef);
+    return querySnapshot.docs.map(doc => doc.data());
+  } catch (error) {
+    console.error('Error getting specialties:', error);
+    throw error;
+  }
+};
+
+// Fetches one specialty's full config (persona, event categories,
+// articleScoring rubric) -- used to populate the evidence-weights slider
+// panel with the detected specialty's current default values.
+export const getSpecialtyById = async (specialtyId) => {
+  try {
+    const specialtyRef = doc(db, `specialties/${specialtyId}`);
+    const specialtyDoc = await getDoc(specialtyRef);
+    return specialtyDoc.exists() ? specialtyDoc.data() : null;
+  } catch (error) {
+    console.error('Error getting specialty:', error);
+    throw error;
+  }
+};
+
+export const createSpecialty = async (specialty) => {
+  try {
+    const specialtyRef = doc(db, `specialties/${specialty.id}`);
+    await setDoc(specialtyRef, specialty);
+  } catch (error) {
+    console.error('Error creating specialty:', error);
+    throw error;
+  }
+};
+
+// Edits an existing specialty (curated or auto-generated). Writes a
+// snapshot of the pre-edit doc to a history subcollection first, so a bad
+// edit can be manually recovered -- see docs/persona-generation-plan.md.
+export const updateSpecialty = async (specialtyId, updatedFields, editorUid) => {
+  try {
+    const specialtyRef = doc(db, `specialties/${specialtyId}`);
+    const currentDoc = await getDoc(specialtyRef);
+    if (currentDoc.exists()) {
+      const historyRef = doc(collection(db, `specialties/${specialtyId}/history`));
+      await setDoc(historyRef, {
+        ...currentDoc.data(),
+        snapshotAt: new Date(),
+        replacedBy: editorUid || null,
+      });
+    }
+    await updateDoc(specialtyRef, {
+      ...updatedFields,
+      lastEditedBy: editorUid || null,
+      lastEditedAt: new Date(),
+    });
+  } catch (error) {
+    console.error('Error updating specialty:', error);
+    throw error;
+  }
+};
+
+// Named evidence-weight presets a doctor can save and reapply across cases
+// (e.g. "Genomics Heavy", "Clinic Heavy") -- scoped per specialty since the
+// factor keys themselves are specialty-specific. See
+// docs/weight-presets-plan.md at the repo root. Anonymous users never call
+// these (no persistence across sessions for them, by the same rule pattern
+// used for specialty edits).
+export const getUserWeightPresets = async (uid, specialtyId) => {
+  try {
+    const presetsRef = collection(db, `users/${uid}/weightPresets`);
+    const q = query(presetsRef, where('specialtyId', '==', specialtyId));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error('Error getting weight presets:', error);
+    throw error;
+  }
+};
+
+export const saveUserWeightPreset = async (uid, specialtyId, label, weights) => {
+  try {
+    const presetsRef = collection(db, `users/${uid}/weightPresets`);
+    const presetRef = await addDoc(presetsRef, {
+      label,
+      specialtyId,
+      weights,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return presetRef.id;
+  } catch (error) {
+    console.error('Error saving weight preset:', error);
+    throw error;
+  }
+};
+
+export const deleteUserWeightPreset = async (uid, presetId) => {
+  try {
+    await deleteDoc(doc(db, `users/${uid}/weightPresets/${presetId}`));
+  } catch (error) {
+    console.error('Error deleting weight preset:', error);
+    throw error;
+  }
 };
 
 export default app;

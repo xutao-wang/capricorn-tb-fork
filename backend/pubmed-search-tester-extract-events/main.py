@@ -5,6 +5,8 @@ from google.genai import types
 import logging
 import os
 
+from specialty import get_specialty, build_event_extraction_prompt
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -39,18 +41,23 @@ def extract_events(request):
         if not text:
             return jsonify({'error': 'Missing text field'}), 400, headers
 
+        specialty = get_specialty(request_json.get('specialtyId'))
+        print(f"Using specialty: {specialty['id']}")
+        prompt = build_event_extraction_prompt(specialty)
+        full_text = f"{prompt}\n\nCase input:\n{text}"
+
         # Create content for Gemini
         contents = [
             types.Content(
                 role="user",
-                parts=[{"text": text}]
+                parts=[{"text": full_text}]
             )
         ]
 
         # Configure Gemini model. Extraction is pure reading comprehension of the
         # case notes — no external lookup needed — so no Google Search grounding.
         # flash-lite is fast and fully sufficient for this task.
-        model = "gemini-3.1-flash-lite-preview"
+        model = "gemini-3.1-flash-lite"
         generate_content_config = types.GenerateContentConfig(
             temperature=1,
             top_p=0.95,

@@ -30,8 +30,8 @@ export const handleSendMessage = ({
   setIsLoadingDocs,
   isLoadingAnalysis,
   setIsLoadingAnalysis,
-  selectedTemplate,
-  userId
+  userId,
+  selectedSpecialtyId
 }) => {
   // Handle both event objects and direct message objects
   if (e && e.preventDefault) {
@@ -64,9 +64,9 @@ export const handleSendMessage = ({
       setChatHistory,
       setIsLoadingDocs,
       setIsLoadingAnalysis,
-      selectedTemplate,
       userId,
-      setMessage // Pass setMessage to handleUserMessage
+      setMessage, // Pass setMessage to handleUserMessage
+      selectedSpecialtyId
     });
   }
 };
@@ -129,9 +129,9 @@ const handleUserMessage = async ({
   setChatHistory,
   setIsLoadingDocs,
   setIsLoadingAnalysis,
-  selectedTemplate,
   userId,
-  setMessage
+  setMessage,
+  selectedSpecialtyId
 }) => {
   setMessage(''); // Clear the message input immediately
   // Redact sensitive information from user message
@@ -190,7 +190,7 @@ const handleUserMessage = async ({
         await retrieveAndAnalyzeArticles(
           redactedMessage,
           [],  // events array
-          selectedTemplate?.content || "",
+          undefined,
           async (data) => {
             if (data.type === 'analysis') {
               await handleAnalysisData(data, user, currentChatId, setChatHistory, setActiveChat, setIsLoadingAnalysis, userId);
@@ -230,7 +230,8 @@ const handleUserMessage = async ({
             }
             return newHistory;
           });
-        }
+        },
+        selectedSpecialtyId
       );
       console.log('CHAT_HANDLER_DEBUG: Finished streaming response');
 

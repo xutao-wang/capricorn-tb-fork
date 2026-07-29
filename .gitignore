@@ -39,6 +39,18 @@ yarn-error.log*
 # Service account keys
 *.json
 bigquery-service-account.json
+!backend/specialties/*.json
+
+# Licensed/copyrighted guideline documents (not ours to redistribute)
+backend/nccn.pdf
+docs/guidelines/
+
+# Local deployment config (contains project IDs, billing account, personal email)
+deploy-env.sh
+
+# Empty scratch files
+frontend/check6.js
+frontend/run4.log
 
 # Firebase configuration
 .firebaserc

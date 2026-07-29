@@ -13,8 +13,9 @@
 // limitations under the License.
 
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, MessageSquare, Plus, Pencil, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MessageSquare, Plus, Pencil, Trash2, Stethoscope } from 'lucide-react';
 import { getUserChats, deleteChat, updateChatTitle, createNewChat, getChatDocumentsRealTime } from '../firebase';
+import SpecialistsPanel from './Specialists/SpecialistsPanel';
 
 const formatChatTitle = (chat) => {
   if (chat.title) return chat.title;
@@ -110,6 +111,7 @@ const ExpandableSidebar = ({ user, onChatSelect, activeChat, initializeNewChat, 
   const [chats, setChats] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showSpecialists, setShowSpecialists] = useState(false);
 
   useEffect(() => {
     let unsubscribe;
@@ -202,6 +204,14 @@ const handleNewChat = async () => {
       {/* Sidebar content */}
       <div className={`w-full overflow-hidden transition-opacity duration-300 ${isExpanded ? 'opacity-100' : 'opacity-0'}`}>
         <div className="p-4 text-white">
+          <button
+            onClick={() => setShowSpecialists(true)}
+            className="flex items-center w-full text-left px-3 py-2 mb-3 text-sm text-white hover:bg-[#2c5282]/30 rounded-md"
+          >
+            <Stethoscope size={16} className="mr-2" />
+            Specialists
+          </button>
+
           <h2 className="text-xs font-semibold text-surface-200 uppercase tracking-wider mb-2">
             Chat History
           </h2>
@@ -249,6 +259,8 @@ const handleNewChat = async () => {
           </div>
         </div>
       </div>
+
+      <SpecialistsPanel isOpen={showSpecialists} onClose={() => setShowSpecialists(false)} user={user} />
     </div>
   );
 };

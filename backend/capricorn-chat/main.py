@@ -21,6 +21,8 @@ from google.cloud import firestore
 import json
 import os
 
+from specialty import get_specialty
+
 # Initialize Firestore client with environment variable
 db = firestore.Client(database=os.environ.get('DATABASE_ID', 'capricorn-eu'))
 
@@ -44,9 +46,10 @@ def get_chat_history(user_id, chat_id):
     messages = chat_doc.to_dict().get('messages', [])
     return messages
 
-def create_gemini_prompt():
-    """Create the expert pediatric oncologist prompt."""
-    return """You are engaging in a conversation with a fellow expert clinician about a pediatric oncology case. The conversation history will contain:
+def create_gemini_prompt(specialty):
+    """Create the clinician-conversation prompt for this specialty."""
+    context_label = specialty['chatContextLabel']
+    return f"""You are engaging in a conversation with a fellow expert clinician about a {context_label}. The conversation history will contain:
 
 1. The initial patient case, including:
    - Detailed case notes
@@ -108,21 +111,24 @@ def chat(request):
     message = request_json.get('message')
     user_id = request_json.get('userId')
     chat_id = request_json.get('chatId')
-    
+
     if not all([message, user_id, chat_id]):
         return jsonify({'error': 'Missing required fields'}), 400, headers
 
     try:
+        specialty = get_specialty(request_json.get('specialtyId'))
+        print(f"Using specialty: {specialty['id']}")
+
         # Get chat history
         chat_history = get_chat_history(user_id, chat_id)
-        
+
         # Create conversation history for Gemini
         conversation = []
-        
+
         # Add system prompt
         conversation.append({
             "role": "user",
-            "parts": [create_gemini_prompt()]
+            "parts": [create_gemini_prompt(specialty)]
         })
         
         # Add chat history - include all messages with raw content

@@ -24,6 +24,8 @@ import math
 import os
 from datetime import datetime
 
+from specialty import get_specialty, build_article_scoring_prompt, calculate_points
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -42,18 +44,53 @@ def fetch_journal_impact_data():
       `sjr`
     FROM
       `{project_id}.{journal_dataset}.scimagojr_2024`
-    ORDER BY 
+    ORDER BY
       sjr DESC
     """
     try:
         query_job = bq_client.query(query)
         results = query_job.result()
-        
+
         # Convert to dictionary for faster lookups
         journal_impact_data = {row['title']: float(row['sjr']) for row in results}
         logger.info(f"Loaded {len(journal_impact_data)} journal impact records")
     except Exception as e:
         logger.error(f"Error fetching journal impact data: {str(e)}")
+
+# Global variable to store citation data (NIH iCite: citation count + RCR,
+# keyed by PMID). See docs/citation-scoring-plan.md at the repo root --
+# this is a sampled subset (~8K PMIDs), not the full iCite dataset, so a
+# lookup miss for an arbitrary retrieved article is expected and handled
+# gracefully (contributes 0 points) rather than treated as an error.
+citation_data = {}
+
+def fetch_citation_data():
+    """Fetch citation data from BigQuery and store in memory."""
+    global citation_data
+    project_id = os.environ.get('GENAI_PROJECT_ID', 'gemini-med-lit-review')
+    citation_dataset = os.environ.get('CITATION_DATASET', 'citation_data')
+    query = f"""
+    SELECT
+      `pmid`,
+      `citation_count`,
+      `relative_citation_ratio`
+    FROM
+      `{project_id}.{citation_dataset}.icite`
+    """
+    try:
+        query_job = bq_client.query(query)
+        results = query_job.result()
+
+        citation_data = {
+            row['pmid']: {
+                'citation_count': row['citation_count'],
+                'relative_citation_ratio': row['relative_citation_ratio']
+            }
+            for row in results
+        }
+        logger.info(f"Loaded {len(citation_data)} citation records")
+    except Exception as e:
+        logger.error(f"Error fetching citation data: {str(e)}")
 
 # Initialize clients with environment variables
 GCP_PROJECT = os.environ.get('GENAI_PROJECT_ID') or os.environ.get('GOOGLE_CLOUD_PROJECT') or 'gemini-med-lit-review'
@@ -67,207 +104,13 @@ client = genai.Client(
 )
 bq_client = bigquery.Client(project=os.environ.get('BIGQUERY_PROJECT_ID', GCP_PROJECT))
 
-def normalize_journal_score(sjr):
-    """Normalize journal SJR score to points between 0-25 to align with other scoring metrics."""
-    if not sjr:
-        return 0
-    # Use log scale to handle large range of SJR values (0 to 106094)
-    # Add 1 to avoid log(0)
-    # Multiply by 5 to align with other point values (5, 10, 15, 25)
-    normalized = math.log(sjr + 1) * 5
-    # Cap at 25 points to match the scale of other point calculations
-    return min(normalized, 25)
-
-def calculate_points(metadata, query_disease=None):
-    """Calculate points based on article metadata and return both total and breakdown."""
-    points = 0
-    breakdown = {}
-    
-    # Journal impact points
-    if metadata.get('journal_title') and metadata.get('journal_sjr'):
-        journal_title = metadata['journal_title']
-        sjr = float(metadata['journal_sjr'])
-        if sjr > 0:
-            impact_points = normalize_journal_score(sjr)
-            points += impact_points
-            breakdown['journal_impact'] = impact_points
-            logger.info(f"Journal '{journal_title}' has SJR {sjr}, awarded {impact_points:.2f} points")
-        else:
-            logger.info(f"Journal '{journal_title}' has no SJR score")
-    
-    # Year-based points: -5 points per year difference from current year
-    current_year = datetime.now().year
-    if metadata.get('year'):
-        try:
-            article_year = int(metadata.get('year'))
-            year_diff = current_year - article_year
-            year_points = -5 * year_diff
-            points += year_points
-            breakdown['year'] = year_points
-        except (ValueError, TypeError):
-            # If year is not a valid integer, skip year-based points
-            pass
-    
-    # Disease Match: +50 points
-    if metadata.get('disease_match'):
-        points += 50
-        breakdown['disease_match'] = 50
-    
-    # Pediatric Focus: +20 points
-    if metadata.get('pediatric_focus'):
-        points += 20
-        breakdown['pediatric_focus'] = 20
-    
-    # Paper Type: +40 points for clinical trial, -5 points for review
-    paper_type = metadata.get('paper_type', '').lower()
-    if 'clinical trial' in paper_type:
-        points += 40
-        breakdown['paper_type'] = 40
-    elif 'review' in paper_type:
-        points -= 5
-        breakdown['paper_type'] = -5
-    
-    # Actionable Events: +15 points per matched event
-    actionable_events = metadata.get('actionable_events', [])
-    matched_events = sum(1 for event in actionable_events if event.get('matches_query', False))
-    if matched_events > 0:
-        event_points = matched_events * 15
-        points += event_points
-        breakdown['actionable_events'] = event_points
-    
-    # Drugs Tested: +5 points
-    if metadata.get('drugs_tested'):
-        points += 5
-        breakdown['drugs_tested'] = 5
-    
-    # Drug Results: +50 points for actual positive treatment shown
-    if metadata.get('treatment_shown'):
-        points += 50
-        breakdown['treatment_shown'] = 50
-    
-    # Cell Studies: +5 points
-    if metadata.get('cell_studies'):
-        points += 5
-        breakdown['cell_studies'] = 5
-    
-    # Mice Studies: +10 points
-    if metadata.get('mice_studies'):
-        points += 10
-        breakdown['mice_studies'] = 10
-    
-    # Case Report: +5 points
-    if metadata.get('case_report'):
-        points += 5
-        breakdown['case_report'] = 5
-    
-    # Series of Case Reports: +10 points
-    if metadata.get('series_of_case_reports'):
-        points += 10
-        breakdown['series_of_case_reports'] = 10
-    
-    # Clinical Study: +15 points
-    if metadata.get('clinical_study'):
-        points += 15
-        breakdown['clinical_study'] = 15
-    
-    # Clinical Study on Children: +20 points
-    if metadata.get('clinical_study_on_children'):
-        points += 20
-        breakdown['clinical_study_on_children'] = 20
-    
-    # Novelty: +10 points
-    if metadata.get('novelty'):
-        points += 10
-        breakdown['novelty'] = 10
-    
-    return points, breakdown
-
-def create_gemini_prompt(article_text, pmcid, methodology_content=None, disease=None, events_text=None):
-    # Add disease and events context to the prompt if provided
-    disease_context = f"\nThe patient's disease is: {disease}\n" if disease else ""
-    events_context = f"\nThe patient's actionable events are: {events_text}\n" if events_text else ""
-    
+def analyze_with_gemini(article_text, pmcid, specialty, disease=None, events_text=None, weight_overrides=None, pmid=None):
     # Create journal context string
     journal_context = ""
     for title, sjr in journal_impact_data.items():
         journal_context += f"- {title}: {sjr}\n"
 
-    # Default methodology if none provided
-    if not methodology_content:
-        methodology_content = """You are an expert pediatric oncologist and you are the chair of the International Leukemia Tumor Board. Your goal is to evaluate full research articles related to oncology, especially those concerning pediatric leukemia, to identify potential advancements in treatment and understanding of the disease.{disease_context}{events_context}
-
-Journal Impact Data (SJR scores):
-The following is a list of journal titles and their SJR scores. When extracting the journal title from the article, find the best matching title from this list and use its SJR score. If no match is found, use 0 as the SJR score.
-
-Journal Titles and Scores:
-{journal_context}
-
-<Article>
-{article_text}
-</Article>
-
-<Instructions>
-Your task is to read the provided full article and extract key information, and then assess the article's relevance and potential impact. You will generate a JSON object containing metadata and analysis. Please use a consistent JSON structure.
-
-As an expert oncologist:
-1. Evaluate if the article's disease focus matches the patient's disease. Set disease_match to true if the article's cancer type is relevant to the patient's condition.
-2. Analyze treatment outcomes. Set treatment_shown to true if the article demonstrates positive treatment results.
-3. For each actionable event you find in the article, determine if it matches any of the patient's actionable events. For genetic mutations, create two separate events:
-   - When you find a general mutation mention (e.g., if the article mentions just "NRAS" when patient has "NRAS (p.Gln61Lys)"), create an event with the general form and set matches_query=true
-   - When you find an exact mutation match (e.g., if the article mentions "NRAS (p.Gln61Lys)" like it appears in the patient's events), create another event with the exact mutation and set matches_query=true
-
-Please analyze the article and provide a JSON response with the following structure:
-
-{
-  "article_metadata": {
-    "title": "...",
-    "year": "...",
-    "journal_title": "...",  // Extract the journal title from the article
-    "journal_sjr": 0,        // Look up the SJR score from the provided list. Use the score of the best matching journal title, or 0 if no match found
-    "cancer_focus": true/false,
-    "pediatric_focus": true/false,
-    "type_of_cancer": "...",
-    "disease_match": true/false,      // Set to true if article's disease is relevant to patient's condition
-    "paper_type": "...",
-    "actionable_events": [
-      {
-        "event": "...",
-        "matches_query": true/false   // Set to true if this event matches any of the patient's actionable events
-      }
-    ],
-    "drugs_tested": true/false,
-    "drug_results": ["...", "..."],   // List of treatment outcomes
-    "treatment_shown": true/false,    // Set to true if article shows positive treatment results
-    "cell_studies": true/false,
-    "mice_studies": true/false,
-    "case_report": true/false,
-    "series_of_case_reports": true/false,
-    "clinical_study": true/false,
-    "clinical_study_on_children": true/false,
-    "novelty": true/false
-  }
-}
-
-Important: The response must be valid JSON and follow this exact structure. Do not include any explanatory text, markdown formatting, or code blocks. Return only the raw JSON object."""
-
-    # Log the article text format
-    logger.info(f"Article text to be inserted:\n{article_text}")
-    
-    # Replace all placeholders
-    prompt = methodology_content
-    prompt = prompt.replace("{article_text}", article_text)
-    prompt = prompt.replace("{disease}", disease if disease else "")
-    prompt = prompt.replace("{events}", events_text if events_text else "")
-    prompt = prompt.replace("{journal_context}", journal_context)
-    
-    # Log the final prompt
-    logger.info(f"Final prompt with article inserted:\n{prompt}")
-    
-    return prompt
-
-def analyze_with_gemini(article_text, pmcid, methodology_content=None, disease=None, events_text=None):
-    # Create prompt with JSON-only instruction
-    prompt = create_gemini_prompt(article_text, pmcid, methodology_content, disease, events_text)
+    prompt = build_article_scoring_prompt(specialty, disease, events_text, journal_context, article_text)
     prompt += "\n\nIMPORTANT: Return ONLY the raw JSON object. Do not include any explanatory text, markdown formatting, or code blocks. The response should start with '{' and end with '}' with no other characters before or after."
     
     # Configure Gemini with user's standard config pattern
@@ -373,7 +216,8 @@ def analyze_with_gemini(article_text, pmcid, methodology_content=None, disease=N
                 return None
                 
             metadata = analysis['article_metadata']
-            required_fields = ['title', 'journal_title', 'journal_sjr', 'cancer_focus', 'type_of_cancer', 'paper_type', 'actionable_events']
+            domain_field_key = specialty['articleScoring']['domainFilterField']['key']
+            required_fields = ['title', 'journal_title', 'journal_sjr', domain_field_key, 'type_of_cancer', 'paper_type', 'actionable_events']
             for field in required_fields:
                 if field not in metadata:
                     logger.error(f"Invalid JSON structure - missing {field}")
@@ -391,7 +235,8 @@ def analyze_with_gemini(article_text, pmcid, methodology_content=None, disease=N
             metadata['link'] = f'https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/'
             
             # Calculate points with disease information
-            points, point_breakdown = calculate_points(metadata, disease)
+            citation_info = citation_data.get(str(pmid)) if pmid else None
+            points, point_breakdown = calculate_points(specialty, metadata, disease, weight_overrides, citation_info)
             metadata['overall_points'] = points
             metadata['point_breakdown'] = point_breakdown
             
@@ -423,10 +268,21 @@ def create_bq_query(events_text, num_articles=15, disease=None):
     # VECTOR_SEARCH returns all duplicate rows and a user requesting
     # num_articles=3 can get the same article three times.
     # Strategy: over-fetch (5x or +20, capped at 500), dedupe by pmc_id keeping
-    # the row with smallest distance (best similarity), then LIMIT to the
-    # user's requested num_articles. Vector search is cheap; the expensive
-    # per-article Gemini analysis only runs on the deduped set.
+    # the row with smallest distance (best similarity), then LIMIT to an
+    # analysis pool bigger than what's actually displayed (see
+    # docs/evidence-weighting-plan-v2.md). Vector search is cheap; the
+    # expensive per-article Gemini analysis only runs on the deduped set.
     over_fetch = min(max(num_articles * 5, num_articles + 20), 500)
+
+    # The doctor's weight_overrides only change scoring, not which
+    # candidates come back from vector search -- unless we score a bigger
+    # pool than we display and let the weighted score decide which ones
+    # survive. 3x is a deliberate cost/quality tradeoff: bigger pools let
+    # weights matter more (more candidates competing for the same slots)
+    # but multiply Gemini analysis cost by the same factor, since every
+    # pool candidate gets a full LLM read regardless of whether it makes
+    # the final cut.
+    analysis_pool_size = min(num_articles * 3, over_fetch)
 
     return f"""
     DECLARE query_text STRING;
@@ -456,23 +312,67 @@ def create_bq_query(events_text, num_articles=15, disease=None):
     FROM deduped
     WHERE rn = 1
     ORDER BY distance
-    LIMIT {num_articles}
+    LIMIT {analysis_pool_size}
     """
 
-def stream_response(events_text, methodology_content=None, disease=None, num_articles=15):
+def stream_response(events_text, specialty, disease=None, num_articles=15, weight_overrides=None):
     try:
-        # Execute BigQuery
-        # Execute BigQuery and log results
+        # Execute BigQuery -- this now returns a larger analysis pool than
+        # num_articles (see create_bq_query's analysis_pool_size), not just
+        # the final displayed count.
         query = create_bq_query(events_text, num_articles, disease=disease)
         query_job = bq_client.query(query)
         results = list(query_job.result())
-        total_articles = len(results)
-        
-        # Get array of PMCIDs from BigQuery results and stream immediately
-        retrieved_pmcids = [row['pmc_id'] for row in results]
-        print(f"Retrieved PMCIDs: {retrieved_pmcids}")
+        pool_size = len(results)
 
-        # Stream PMCIDs immediately
+        # Stream initial metadata. total_articles here reflects the pool
+        # being screened, not the final display count, so the doctor's
+        # progress indicator reflects the actual (larger) amount of work
+        # happening before results appear.
+        yield json.dumps({
+            "type": "metadata",
+            "data": {
+                "total_articles": pool_size,
+                "current_article": 0,
+                "status": "processing"
+            }
+        }) + "\n"
+
+        # Score every candidate in the pool -- buffered, not streamed as it
+        # completes, since we don't know which candidates make the final
+        # cut until every one has a weighted score. See
+        # docs/evidence-weighting-plan-v2.md at the repo root.
+        scored_articles = []
+        for idx, row in enumerate(results, 1):
+            pmcid = row['pmc_id']
+            pmid = row['pmid']
+            content = row['article_text']
+
+            logger.info(f"Scoring candidate {idx}/{pool_size}: PMCID {pmcid}, content length: {len(content)}")
+
+            if idx > 1:  # Don't delay before the first analysis
+                logger.info("Waiting 5 seconds before next analysis...")
+                time.sleep(5)
+
+            try:
+                analysis = analyze_with_gemini(content, pmcid, specialty, disease, events_text, weight_overrides, pmid)
+                if analysis:
+                    scored_articles.append(analysis)
+                else:
+                    logger.error(f"Failed to analyze article {pmcid}")
+            except Exception as e:
+                logger.error(f"Error processing article {pmcid}: {str(e)}")
+
+        # Sort by the doctor's weighted score and keep only the requested
+        # count -- this is the step that makes weight_overrides change
+        # *which* articles the doctor sees, not just their display order.
+        scored_articles.sort(key=lambda a: a['article_metadata']['overall_points'], reverse=True)
+        top_articles = scored_articles[:num_articles]
+        total_articles = len(top_articles)
+
+        retrieved_pmcids = [a['article_metadata']['PMCID'] for a in top_articles]
+        print(f"Selected top {total_articles} of {pool_size} scored candidates: {retrieved_pmcids}")
+
         yield json.dumps({
             "type": "pmcids",
             "data": {
@@ -480,69 +380,18 @@ def stream_response(events_text, methodology_content=None, disease=None, num_art
             }
         }) + "\n"
 
-        # Stream initial metadata
-        yield json.dumps({
-            "type": "metadata",
-            "data": {
-                "total_articles": total_articles,
-                "current_article": 0,
-                "status": "processing"
-            }
-        }) + "\n"
-
-        # Process each article
-        for idx, row in enumerate(results, 1):
-            pmcid = row['pmc_id']  # This is pmc_id from the query result
-            pmid = row['pmid']   # This is pmid from the query result
-            content = row['article_text']
-            
-            # Log article details before analysis
-            logger.info(f"Processing article:\nPMCID: {pmcid}\nContent length: {len(content)}\nFirst 200 chars: {content[:200]}")
-            
-            # Add delay between articles
-            if idx > 1:  # Don't delay for first article
-                logger.info("Waiting 5 seconds before next analysis...")
-                time.sleep(5)
-            
-            # Analyze with Gemini and prepare complete response object
-            try:
-                # Pass PMCID for URL generation and metadata
-                analysis = analyze_with_gemini(content, pmcid, methodology_content, disease, events_text)
-                if analysis:
-                    # Create complete response object
-                    response_obj = {
-                        "type": "article_analysis",
-                        "data": {
-                            "progress": {
-                                "article_number": idx,
-                                "total_articles": total_articles
-                            },
-                            "analysis": analysis
-                        }
-                    }
-                    # Send complete JSON object with newline
-                    yield json.dumps(response_obj) + "\n"
-                else:
-                    logger.error(f"Failed to analyze article {row['pmc_id']}")
-                    error_obj = {
-                        "type": "error",
-                        "data": {
-                            "message": f"Failed to analyze article {row['pmc_id']}",
-                            "article_number": idx,
-                            "total_articles": total_articles
-                        }
-                    }
-                    yield json.dumps(error_obj) + "\n"
-            except Exception as e:
-                logger.error(f"Error processing article {row['pmc_id']}: {str(e)}")
-                yield json.dumps({
-                    "type": "error",
-                    "data": {
-                        "message": f"Error processing article {row['pmc_id']}: {str(e)}",
+        for idx, analysis in enumerate(top_articles, 1):
+            response_obj = {
+                "type": "article_analysis",
+                "data": {
+                    "progress": {
                         "article_number": idx,
                         "total_articles": total_articles
-                    }
-                }) + "\n"
+                    },
+                    "analysis": analysis
+                }
+            }
+            yield json.dumps(response_obj) + "\n"
 
         # Send completion message as complete JSON object
         completion_obj = {
@@ -564,8 +413,9 @@ def stream_response(events_text, methodology_content=None, disease=None, num_art
             }
         }) + "\n"
 
-# Fetch journal impact data when module loads
+# Fetch journal impact and citation data when module loads
 fetch_journal_impact_data()
+fetch_citation_data()
 
 @functions_framework.http
 def retrieve_full_articles(request):
@@ -595,13 +445,15 @@ def retrieve_full_articles(request):
         if not events_text:
             return jsonify({'error': 'Missing events_text field'}), 400, headers
 
-        # Get methodology content, disease, and num_articles if provided
-        methodology_content = request_json.get('methodology_content')
+        # Get specialty, disease, and num_articles if provided
+        specialty = get_specialty(request_json.get('specialtyId'))
+        print(f"Using specialty: {specialty['id']}")
         disease = request_json.get('disease')
         num_articles = request_json.get('num_articles', 15)  # Default to 15 if not provided
+        weight_overrides = request_json.get('weightOverrides')
 
         return Response(
-            stream_response(events_text, methodology_content, disease, num_articles),
+            stream_response(events_text, specialty, disease, num_articles, weight_overrides),
             headers=headers,
             mimetype='text/event-stream'
         )

@@ -1,0 +1,165 @@
+{
+  "id": "pediatric-oncology",
+  "label": "Pediatric Oncology",
+  "description": "Pediatric cancers, including leukemias, lymphomas, and solid tumors in children, with a focus on genetic and immunophenotypic drivers of treatment selection.",
+
+  "personaTitle": "pediatric oncologist",
+  "boardName": "International Leukemia Tumor Board (iLTB)",
+
+  "diseaseExtraction": {
+    "guidance": null,
+    "fewShotExamples": [
+      {
+        "input": "A now almost 4-year-old female diagnosed with KMT2A-rearranged AML and CNS2 involvement exhibited refractory disease after NOPHO DBH AML 2012 protocol...",
+        "output": "AML"
+      },
+      {
+        "input": "18 y/o boy, diagnosed in November 2021 with T-ALL with CNS1, without any extramedullary disease. Was treated according to ALLTogether protocol...",
+        "output": "T-ALL"
+      },
+      {
+        "input": "A 10-year-old patient with relapsed B-cell acute lymphoblastic leukemia (B-ALL) presented...",
+        "output": "B-cell acute lymphoblastic leukemia (B-ALL)"
+      }
+    ]
+  },
+
+  "eventExtraction": {
+    "categoryIntro": "Extract all clinically relevant and actionable events in the following categories:",
+    "categories": [
+      {
+        "name": "CD markers / Immunophenotype",
+        "block": "**Category 1 — CD markers / Immunophenotype:**\nExtract the marker name. Examples: \"CD33\", \"CD19\", \"CD123\", \"CD22\""
+      },
+      {
+        "name": "Genetic alterations",
+        "block": "**Category 2 — Genetic alterations (ALWAYS include the alteration type):**\nDo NOT output a bare gene name. ALWAYS append the alteration type.\n*  Mutations: \"NRAS mutation\", \"NRAS (p.Gln61Lys) mutation\", \"JAK2 clonal mutation\", \"FLT3-ITD mutation\"\n*  Fusions: \"KMT2A::MLLT3 fusion\", \"BCR::ABL1 fusion\", \"NUP98::TOP1 fusion\"\n*  Deletions: \"CDKN2A deletion\", \"IKZF1 deletion\", \"TP53 deletion\"\n*  Overexpression: \"CRLF2 overexpression\", \"EVI1 overexpression\", \"CCNE1 overexpression\""
+      },
+      {
+        "name": "Chromosome-level events",
+        "block": "**Category 3 — Chromosome-level events:**\n\"del 17q\", \"t(11;20)(p15.4;q12)\", \"t(9;22)(q34;q11)\", \"monosomy 7\""
+      },
+      {
+        "name": "Drug sensitivity / drug response profiling (DRP)",
+        "block": "**Category 4 — Drug sensitivity / drug response profiling (DRP):**\n\"DRP sensitivity to panabinostat\", \"DRP sensitivity to venetoclax\""
+      }
+    ],
+    "postCategoryNotes": [
+      "Focus on information that is directly relevant to potential therapy selection or clinical management. Avoid vague or redundant information like \"very good clinical condition\".",
+      "CRITICAL: For genetic events, NEVER emit just a gene name (e.g., \"NRAS\"). ALWAYS include the alteration type (e.g., \"NRAS mutation\"). A bare gene name is not an actionable event — the alteration type determines whether it is targetable."
+    ],
+    "fewShotExample": {
+      "caseNoteInput": "A now almost 4-year-old female diagnosed with KMT2A-rearranged AML and CNS2 involvement exhibited refractory disease after NOPHO DBH AML 2012 protocol. Post- MEC and ADE, MRD remained at 35% and 53%. Vyxeos-clofarabine therapy reduced MRD to 18%. Third-line FLAG-Mylotarg lowered MRD to 3.5% (flow) and 1% (molecular). After a cord blood HSCT in December 2022, she relapsed 10 months later with 3% MRD and femoral extramedullary disease.\nAfter the iLTB discussion, in November 2023 the patient was enrolled in the SNDX5613 trial, receiving revumenib for three months, leading to a reduction in KMT2A MRD to 0.1% by PCR. Subsequently, the patient underwent a second allogeneic HSCT using cord blood with treosulfan, thiotepa, and fludarabine conditioning, followed by revumenib maintenance. In August 2024, 6.5 months after the second HSCT, the patient experienced a bone marrow relapse with 33% blasts. The patient is currently in very good clinical condition.\nDiagnostic tests:\nWES and RNAseq were performed on the 1st relapse sample showing KMT2A::MLLT3 fusion and NRAS (p.Gln61Lys) mutation.\nFlow cytometry from the current relapse showed positive CD33 and CD123.\nWES and RNAseq of the current relapse sample is pending. ",
+      "expectedOutput": "\"KMT2A::MLLT3 fusion\" \"NRAS (p.Gln61Lys) mutation\" \"CD33\" \"CD123\""
+    },
+    "guidanceNotes": [
+      "**Focus on Actionable Events:** We are not trying to summarize the case but to find what information is relevant to decision-making. This helps filter noise and focus on clinically significant findings.",
+      "**Prioritization:** Starting with pediatric studies ensures that we tailor our searches to the specific patient population.",
+      "**Specific Search Terms:** Using exact terms such as \"KMT2A::MLLT3 fusion\" is essential for precision. Adding \"therapy\", \"treatment\" or \"clinical trials\" helps to find relevant studies.",
+      "**Combinations:** Combining genetic and immunophenotypic features allows for refined searches that might be more relevant to the patient.",
+      "**Iteration:** If initial search results are not helpful, we can modify and refine the queries based on the available data."
+    ]
+  },
+
+  "articleScoring": {
+    "evaluationGoal": "evaluate full research articles related to oncology, especially those concerning pediatric leukemia, to identify potential advancements in treatment and understanding of the disease",
+    "domainFilterField": {
+      "key": "cancer_focus",
+      "label": "Cancer Focus",
+      "description": "Whether the article relates to cancer"
+    },
+    "perMatchedEventPoints": 15,
+    "journalImpactMultiplier": 5,
+    "journalImpactCap": 25,
+    "yearDecayRate": 5,
+    "clinicalTrialBonus": 40,
+    "reviewPenalty": 5,
+    "citationImpactMultiplier": 5,
+    "citationImpactCap": 25,
+    "fields": [
+      {
+        "key": "disease_match",
+        "label": "Disease Match",
+        "points": 50,
+        "description": "Set to true if the article's disease focus matches the patient's disease. Articles that cover the exact disease in question receive significant points.",
+        "optional": false
+      },
+      {
+        "key": "population_focus",
+        "label": "Pediatric Focus",
+        "points": 20,
+        "description": "Whether the article focuses specifically on pediatric cancer",
+        "optional": true
+      },
+      {
+        "key": "drugs_tested",
+        "label": "Drugs Tested",
+        "points": 5,
+        "description": "Whether any drugs are mentioned as tested",
+        "optional": false
+      },
+      {
+        "key": "treatment_shown",
+        "label": "Treatment Results",
+        "points": 50,
+        "description": "Set to true if the article demonstrates positive treatment results",
+        "optional": false
+      },
+      {
+        "key": "cell_studies",
+        "label": "Cell Studies",
+        "points": 5,
+        "description": "Whether drugs were tested on cells in vitro",
+        "optional": false
+      },
+      {
+        "key": "mice_studies",
+        "label": "Mice Studies",
+        "points": 10,
+        "description": "Whether drugs were tested on mice/PDX models",
+        "optional": false
+      },
+      {
+        "key": "case_report",
+        "label": "Case Report",
+        "points": 5,
+        "description": "Whether the article presents a case report",
+        "optional": false
+      },
+      {
+        "key": "series_of_case_reports",
+        "label": "Series of Case Reports",
+        "points": 10,
+        "description": "Whether the article presents multiple case reports",
+        "optional": false
+      },
+      {
+        "key": "clinical_study",
+        "label": "Clinical Study",
+        "points": 15,
+        "description": "Whether the article describes a clinical study",
+        "optional": false
+      },
+      {
+        "key": "clinical_study_on_target_population",
+        "label": "Clinical Study on Children",
+        "points": 20,
+        "description": "Whether the clinical study was specifically on children",
+        "optional": true
+      },
+      {
+        "key": "novelty",
+        "label": "Novelty",
+        "points": 10,
+        "description": "If the paper describes a novel mechanism or therapeutic strategy",
+        "optional": false
+      }
+    ]
+  },
+
+  "finalAnalysis": {
+    "personaRole": "pediatric hematologist"
+  },
+
+  "chatContextLabel": "pediatric oncology case"
+}

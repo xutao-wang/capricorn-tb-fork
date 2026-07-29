@@ -28,7 +28,7 @@ dlp_client = dlp_v2.DlpServiceClient()
 # Initialize Gemini client using Vertex AI with application-default credentials
 GCP_PROJECT = os.environ.get('PROJECT_ID') or os.environ.get('GOOGLE_CLOUD_PROJECT') or 'gemini-med-lit-review'
 GCP_LOCATION = os.environ.get('LOCATION', 'global')  # gemini-3.1-pro-preview requires 'global' region
-MODEL = "gemini-3.1-flash-lite-preview"
+MODEL = "gemini-3.1-flash-lite"
 
 client = genai.Client(
     vertexai=True,

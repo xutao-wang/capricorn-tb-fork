@@ -5,6 +5,8 @@ from google.genai import types
 import logging
 import os
 
+from specialty import get_specialty, build_disease_extraction_prompt
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -15,37 +17,6 @@ client = genai.Client(
     project=os.environ.get('PROJECT_ID'),
     location=os.environ.get('LOCATION'),
 )
-
-PROMPT = """You are an expert pediatric oncologist and chair of the International Leukemia Tumor Board (iLTB). Your role is to analyze patient case notes and identify the primary disease being discussed.
-
-Input: Patient case notes, as provided by a clinician. This will include information on diagnosis, treatment history, and relevant diagnostic findings.
-
-Task:
-
-Disease Extraction:
-
-Carefully analyze the patient case notes.
-
-Identify the primary disease the patient is diagnosed with and/or being treated for. Extract this disease name exactly as it is written in the notes. It should be the initial diagnosis.
-
-Example:
-
-Case Note Input: "A now almost 4-year-old female diagnosed with KMT2A-rearranged AML and CNS2 involvement exhibited refractory disease after NOPHO DBH AML 2012 protocol..."
-
-Output: AML
-
-Case Note Input: "18 y/o boy, diagnosed in November 2021 with T-ALL with CNS1, without any extramedullary disease. Was treated according to ALLTogether protocol..."
-
-Output: T-ALL
-
-Case Note Input: "A 10-year-old patient with relapsed B-cell acute lymphoblastic leukemia (B-ALL) presented..."
-
-Output: B-cell acute lymphoblastic leukemia (B-ALL)
-
-Extract the disease from the provided patient information. Only output the disease name, exactly as it is written in the case notes. Do not include any other text or formatting.
-
-Case notes:
-"""
 
 @functions_framework.http
 def extract_disease(request):
@@ -70,18 +41,22 @@ def extract_disease(request):
         if not text:
             return jsonify({'error': 'Missing text field'}), 400, headers
 
+        specialty = get_specialty(request_json.get('specialtyId'))
+        print(f"Using specialty: {specialty['id']}")
+        prompt = build_disease_extraction_prompt(specialty)
+
         # Create content for Gemini
         contents = [
             types.Content(
                 role="user",
-                parts=[{"text": PROMPT + text}]
+                parts=[{"text": prompt + text}]
             )
         ]
 
         # Configure Gemini model. Extraction is pure reading comprehension of the
         # case notes — no external lookup needed — so no Google Search grounding.
         # flash-lite is fast and fully sufficient for this task.
-        model = "gemini-3.1-flash-lite-preview"
+        model = "gemini-3.1-flash-lite"
         generate_content_config = types.GenerateContentConfig(
             temperature=1,
             top_p=0.95,

@@ -47,12 +47,15 @@ const MainPanel = ({
   extractedEvents,
   setExtractedDisease,
   setExtractedEvents,
+  detectedSpecialty,
+  detectedSpecialtyConfig,
+  weightsConfirmed,
+  weightOverrides,
+  onConfirmWeights,
   isRetrieving,
   handleRetrieve,
   isBox3Hovered,
   setIsBox3Hovered,
-  promptContent,
-  setPromptContent,
   message,
   setMessage,
   handleSendMessage,
@@ -202,14 +205,17 @@ const MainPanel = ({
             extractedEvents={extractedEvents}
             setExtractedDisease={setExtractedDisease}
             setExtractedEvents={setExtractedEvents}
+            detectedSpecialty={detectedSpecialty}
+            detectedSpecialtyConfig={detectedSpecialtyConfig}
+            weightsConfirmed={weightsConfirmed}
+            weightOverrides={weightOverrides}
+            onConfirmWeights={onConfirmWeights}
             isRetrieving={isRetrieving}
             handleRetrieve={handleRetrieve}
             isBox3Hovered={isBox3Hovered}
             setIsBox3Hovered={setIsBox3Hovered}
             isPromptExpanded={isPromptExpanded}
             setIsPromptExpanded={setIsPromptExpanded}
-            promptContent={promptContent}
-            setPromptContent={setPromptContent}
             numArticles={numArticles}
             setNumArticles={setNumArticles}
             shouldUseScrollEffect={shouldUseScrollEffect}

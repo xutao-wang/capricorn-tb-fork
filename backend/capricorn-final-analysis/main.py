@@ -22,6 +22,9 @@ import logging
 import os
 from datetime import datetime
 
+from specialty import get_specialty
+from clinical_trials import screen_all_events
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -30,6 +33,7 @@ logger = logging.getLogger(__name__)
 GCP_PROJECT = os.environ.get('GENAI_PROJECT_ID') or os.environ.get('GOOGLE_CLOUD_PROJECT') or 'gemini-med-lit-review'
 GCP_LOCATION = os.environ.get('LOCATION', 'global')  # gemini-3.1-pro-preview requires 'global' region
 MODEL = "gemini-3.1-pro-preview"
+ENABLE_CLINICAL_TRIALS = os.environ.get('ENABLE_CLINICAL_TRIALS', 'true').lower() == 'true'
 
 genai_client = genai.Client(
     vertexai=True,
@@ -83,7 +87,31 @@ def get_full_articles(analyzed_articles):
         logger.error(f"Error retrieving articles: {str(e)}")
         return []
 
-def create_final_analysis_prompt(case_notes, disease, events, articles):
+def format_clinical_trials_block(clinical_trials):
+    """Formats {event: [verdict_dict, ...]} into a text block for the
+    prompt. Returns None if there's nothing to include (feature disabled,
+    fetch/screening failed, or genuinely no candidate trials found) so the
+    caller can omit the whole section rather than tell Gemini to reference
+    an empty list."""
+    if not clinical_trials or not any(clinical_trials.values()):
+        return None
+
+    sections = []
+    for event, verdicts in clinical_trials.items():
+        if not verdicts:
+            continue
+        trial_lines = "\n".join(
+            f"- {v['nctId']} ({v.get('overallStatus', 'N/A')}, {v.get('phase', 'N/A')}): "
+            f"{v.get('verdict', 'insufficient_info')} -- {v.get('rationale', '')}"
+            + (f" [Concerns: {'; '.join(v['concerns'])}]" if v.get('concerns') else "")
+            for v in verdicts
+        )
+        sections.append(f"Event: {event}\n{trial_lines}")
+
+    return "\n\n".join(sections)
+
+
+def create_final_analysis_prompt(case_notes, disease, events, articles, specialty, clinical_trials=None):
     """Create the prompt for final analysis."""
     
     # Create a table of analyzed articles
@@ -113,7 +141,16 @@ Full Text:
 {'='*80}
 """)
 
-    prompt = f"""You are a pediatric hematologist sitting on a tumor board for patients with complex diseases. Your goal is to find the best treatment for every patient, considering their actionable events (genetic, immune-related, or other).
+    trials_block = format_clinical_trials_block(clinical_trials)
+    trials_section = f"""
+
+CANDIDATE CLINICAL TRIALS (screened against this patient's eligibility, from ClinicalTrials.gov):
+{'='*80}
+{trials_block}
+{'='*80}""" if trials_block else ""
+
+    persona_role = specialty['finalAnalysis']['personaRole']
+    prompt = f"""You are a {persona_role} sitting on a tumor board for patients with complex diseases. Your goal is to find the best treatment for every patient, considering their actionable events (genetic, immune-related, or other).
 
 CASE INFORMATION:
 {case_notes}
@@ -124,7 +161,7 @@ Actionable Events: {', '.join(events)}
 ANALYZED ARTICLES:
 {'='*80}
 {'\n'.join(articles_table)}
-{'='*80}
+{'='*80}{trials_section}
 
 Based on the clinical input, actionable events, and the analyzed articles above, please provide a comprehensive analysis in markdown format with the following sections:
 
@@ -141,8 +178,8 @@ A brief paragraph summarizing the case.
 Following the table, provide a concise interpretation of the actionable events, focusing on their clinical implications, potential impact on treatment decisions, and overall prognosis. Highlight any synergistic or conflicting interactions between events.
 
 ### 3. Treatment Options
-| Event | Treatment | Evidence (PMCID) | Evidence Summary | Previous Response | Warnings |
-|-------|-----------|------------------|------------------|-------------------|-----------|
+| Event | Treatment | Evidence (PMCID) | Evidence Summary | Related Clinical Trials | Previous Response | Warnings |
+|-------|-----------|------------------|------------------|-------------------------|-------------------|-----------|
 [Fill with treatment details, one row per recommendation]
 
 IMPORTANT FOR TREATMENT OPTIONS:
@@ -153,7 +190,14 @@ IMPORTANT FOR TREATMENT OPTIONS:
 - For every treatment recommendation, you MUST trace it back to specific information in at least one of the articles
 - Format PMCIDs as clickable links with publication year: [PMCID: PMC12345 (2023)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC12345/)
 
-After the table, offer a succinct clinical perspective on the recommended treatments. Address the strength of evidence, potential benefits and risks, and how these treatments align with the patient's specific genetic and clinical profile. Discuss any notable drug interactions or sequencing considerations.
+IMPORTANT FOR RELATED CLINICAL TRIALS COLUMN:
+- Only populate this column using the CANDIDATE CLINICAL TRIALS section below (if present) -- do not invent or recall trials from general knowledge
+- Match trials to the row's Event, using the screened eligibility verdict already provided for that trial
+- Format each trial as a clickable link with its verdict and phase: [NCT12345678 (Likely Eligible, Phase 2)](https://clinicaltrials.gov/study/NCT12345678)
+- If a trial's verdict is "likely_ineligible" or has listed concerns, still include it but note the concern briefly in this cell (e.g. "excludes prior HCT")
+- If no candidate trials were provided for that event, or the CANDIDATE CLINICAL TRIALS section is absent entirely, leave this column as "None found" -- do not leave it blank and do not fabricate a trial
+
+After the table, offer a succinct clinical perspective on the recommended treatments. Address the strength of evidence, potential benefits and risks, and how these treatments align with the patient's specific genetic and clinical profile. Discuss any notable drug interactions or sequencing considerations. If any cited clinical trial has a "likely_ineligible" verdict or notable concerns, address that explicitly here rather than only in the table cell.
 
 ### 4. Multi-Target Opportunities
 | Treatment Combination | Targeted Events | Evidence (PMCID) | Summary |
@@ -274,6 +318,8 @@ def final_analysis(request):
         disease = request_json.get('disease')
         events = request_json.get('events')
         analyzed_articles = request_json.get('analyzed_articles')
+        specialty = get_specialty(request_json.get('specialtyId'))
+        print(f"Using specialty: {specialty['id']}")
 
         # Log each field's presence/absence
         missing_fields = []
@@ -304,12 +350,28 @@ def final_analysis(request):
             logger.error("Failed to retrieve any articles from BigQuery")
             return jsonify({'error': 'Failed to retrieve articles from BigQuery'}), 500, headers
 
+        # Screen clinical trials against this patient's eligibility before
+        # building the prompt -- failures here degrade to no trial data
+        # rather than blocking the analysis (see clinical_trials.py).
+        clinical_trials = {}
+        if ENABLE_CLINICAL_TRIALS:
+            try:
+                clinical_trials = screen_all_events(case_notes, disease, events, specialty, genai_client)
+            except Exception as e:
+                logger.error(f"Clinical trial screening failed: {str(e)}")
+
         # Create prompt and analyze
-        prompt = create_final_analysis_prompt(case_notes, disease, events, articles_with_content)
+        prompt = create_final_analysis_prompt(case_notes, disease, events, articles_with_content, specialty, clinical_trials)
         analysis = analyze_with_gemini(prompt)
 
         if not analysis:
             return jsonify({'error': 'Failed to generate analysis'}), 500, headers
+
+        if any(clinical_trials.values()):
+            analysis['markdown_content'] += (
+                "\n\n*Clinical trial matches reflect ClinicalTrials.gov data as of this session "
+                "and may change (e.g. recruiting status) by the time this case is revisited.*"
+            )
 
         return jsonify({
             'success': True,

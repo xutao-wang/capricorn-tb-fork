@@ -1,0 +1,151 @@
+{
+  "id": "cardiology",
+  "label": "Cardiology",
+  "description": "Inherited and structural heart conditions, including cardiomyopathies, arrhythmias, heart failure, and congenital heart disease, with a focus on genetic and functional cardiac findings.",
+
+  "personaTitle": "cardiologist",
+  "boardName": null,
+
+  "diseaseExtraction": {
+    "guidance": null,
+    "fewShotExamples": [
+      {
+        "input": "45-year-old man with hypertrophic cardiomyopathy, MYBPC3 mutation positive, family history of sudden cardiac death...",
+        "output": "Hypertrophic cardiomyopathy (HCM)"
+      },
+      {
+        "input": "58-year-old woman with heart failure with reduced ejection fraction (HFrEF), LVEF 25%, ischemic etiology...",
+        "output": "Heart failure with reduced ejection fraction (HFrEF)"
+      },
+      {
+        "input": "30-year-old man with long QT syndrome, KCNQ1 mutation, recurrent syncope...",
+        "output": "Long QT syndrome"
+      }
+    ]
+  },
+
+  "eventExtraction": {
+    "categoryIntro": "Extract all clinically relevant and actionable events in the following categories:",
+    "categories": [
+      {
+        "name": "Genetic variants",
+        "block": "**Category 1 — Genetic variants (ALWAYS include the gene and variant type):**\nDo NOT output a bare gene name. ALWAYS append the variant type.\nExamples: \"MYBPC3 mutation\", \"KCNQ1 mutation\", \"LMNA mutation\", \"TTN truncating variant\""
+      },
+      {
+        "name": "Functional / imaging findings",
+        "block": "**Category 2 — Functional / imaging findings:**\n\"LVEF 25%\", \"septal hypertrophy\", \"late gadolinium enhancement\", \"LVOT gradient 60 mmHg\""
+      },
+      {
+        "name": "Arrhythmia / electrophysiology findings",
+        "block": "**Category 3 — Arrhythmia / electrophysiology findings:**\n\"QTc prolongation\", \"non-sustained ventricular tachycardia\", \"atrial fibrillation\""
+      },
+      {
+        "name": "Biomarkers",
+        "block": "**Category 4 — Biomarkers:**\n\"elevated NT-proBNP\", \"elevated troponin\""
+      }
+    ],
+    "postCategoryNotes": [
+      "Focus on information that is directly relevant to potential therapy selection or clinical management. Avoid vague or redundant information like \"stable vital signs\".",
+      "CRITICAL: For genetic events, NEVER emit just a gene name (e.g., \"MYBPC3\"). ALWAYS include the variant type (e.g., \"MYBPC3 mutation\"). A bare gene name is not an actionable event — the variant type determines whether it is clinically significant."
+    ],
+    "fewShotExample": {
+      "caseNoteInput": "45-year-old man presents with exertional dyspnea and a family history of sudden cardiac death. Echocardiogram shows asymmetric septal hypertrophy with LVOT gradient of 60 mmHg. Genetic testing reveals a pathogenic MYBPC3 mutation. Holter monitor shows non-sustained ventricular tachycardia.",
+      "expectedOutput": "\"MYBPC3 mutation\" \"septal hypertrophy\" \"LVOT gradient 60 mmHg\" \"non-sustained ventricular tachycardia\""
+    },
+    "guidanceNotes": [
+      "**Focus on Actionable Events:** We are not trying to summarize the case but to find what information is relevant to decision-making. This helps filter noise and focus on clinically significant findings.",
+      "**Prioritization:** Prioritizing genotype-driven studies ensures searches are matched to the patient's specific inherited or structural cardiac condition.",
+      "**Specific Search Terms:** Using exact terms such as \"MYBPC3 mutation\" is essential for precision. Adding \"therapy\", \"treatment\" or \"clinical trials\" helps to find relevant studies.",
+      "**Combinations:** Combining genetic and functional/imaging features allows for refined searches that might be more relevant to the patient.",
+      "**Iteration:** If initial search results are not helpful, we can modify and refine the queries based on the available data."
+    ]
+  },
+
+  "articleScoring": {
+    "evaluationGoal": "evaluate full research articles related to cardiovascular disease, especially those concerning inherited cardiac conditions, to identify potential advancements in treatment and understanding of the disease",
+    "domainFilterField": {
+      "key": "cardiac_focus",
+      "label": "Cardiac Focus",
+      "description": "Whether the article relates to cardiovascular disease"
+    },
+    "perMatchedEventPoints": 15,
+    "journalImpactMultiplier": 5,
+    "journalImpactCap": 25,
+    "yearDecayRate": 5,
+    "clinicalTrialBonus": 40,
+    "reviewPenalty": 5,
+    "citationImpactMultiplier": 5,
+    "citationImpactCap": 25,
+    "fields": [
+      {
+        "key": "disease_match",
+        "label": "Disease Match",
+        "points": 50,
+        "description": "Set to true if the article's disease focus matches the patient's disease. Articles that cover the exact condition in question receive significant points.",
+        "optional": false
+      },
+      {
+        "key": "drugs_tested",
+        "label": "Drugs Tested",
+        "points": 5,
+        "description": "Whether any drugs or interventions are mentioned as tested",
+        "optional": false
+      },
+      {
+        "key": "treatment_shown",
+        "label": "Treatment Results",
+        "points": 50,
+        "description": "Set to true if the article demonstrates positive treatment results",
+        "optional": false
+      },
+      {
+        "key": "cell_studies",
+        "label": "Cell Studies",
+        "points": 5,
+        "description": "Whether interventions were tested on cells in vitro (e.g. iPSC-cardiomyocytes)",
+        "optional": false
+      },
+      {
+        "key": "mice_studies",
+        "label": "Animal Model Studies",
+        "points": 10,
+        "description": "Whether interventions were tested in animal models",
+        "optional": false
+      },
+      {
+        "key": "case_report",
+        "label": "Case Report",
+        "points": 5,
+        "description": "Whether the article presents a case report",
+        "optional": false
+      },
+      {
+        "key": "series_of_case_reports",
+        "label": "Series of Case Reports",
+        "points": 10,
+        "description": "Whether the article presents multiple case reports",
+        "optional": false
+      },
+      {
+        "key": "clinical_study",
+        "label": "Clinical Study",
+        "points": 15,
+        "description": "Whether the article describes a clinical study",
+        "optional": false
+      },
+      {
+        "key": "novelty",
+        "label": "Novelty",
+        "points": 10,
+        "description": "If the paper describes a novel mechanism or therapeutic strategy",
+        "optional": false
+      }
+    ]
+  },
+
+  "finalAnalysis": {
+    "personaRole": "cardiologist"
+  },
+
+  "chatContextLabel": "cardiology case involving an inherited or structural heart condition"
+}

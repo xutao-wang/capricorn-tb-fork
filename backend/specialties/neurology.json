@@ -1,0 +1,158 @@
+{
+  "id": "neurology",
+  "label": "Neurology",
+  "description": "Neurological and neurogenetic conditions, including epilepsy syndromes, demyelinating disease, and brain tumors, with a focus on genetic variants and imaging/EEG findings.",
+
+  "personaTitle": "neurologist",
+  "boardName": null,
+
+  "diseaseExtraction": {
+    "guidance": null,
+    "fewShotExamples": [
+      {
+        "input": "8-year-old girl with Dravet syndrome, SCN1A mutation positive, drug-resistant epilepsy since infancy...",
+        "output": "Dravet syndrome"
+      },
+      {
+        "input": "35-year-old woman with relapsing-remitting multiple sclerosis, new T2 hyperintense lesions on MRI...",
+        "output": "Relapsing-remitting multiple sclerosis"
+      },
+      {
+        "input": "62-year-old man with glioblastoma, IDH-wildtype, MGMT promoter unmethylated...",
+        "output": "Glioblastoma"
+      }
+    ]
+  },
+
+  "eventExtraction": {
+    "categoryIntro": "Extract all clinically relevant and actionable events in the following categories:",
+    "categories": [
+      {
+        "name": "Genetic variants",
+        "block": "**Category 1 — Genetic variants (ALWAYS include the variant type):**\nDo NOT output a bare gene name. ALWAYS append the variant type.\nExamples: \"SCN1A mutation\", \"MECP2 mutation\", \"IDH1 mutation\", \"MGMT promoter methylation\""
+      },
+      {
+        "name": "Seizure / EEG findings",
+        "block": "**Category 2 — Seizure / EEG findings:**\n\"generalized tonic-clonic seizures\", \"focal seizures\", \"epileptiform discharges\""
+      },
+      {
+        "name": "Imaging findings",
+        "block": "**Category 3 — Imaging findings:**\n\"T2 hyperintense lesions\", \"contrast-enhancing mass\", \"hippocampal sclerosis\""
+      },
+      {
+        "name": "Biomarkers / CSF findings",
+        "block": "**Category 4 — Biomarkers / CSF findings:**\n\"oligoclonal bands\", \"elevated CSF protein\""
+      }
+    ],
+    "postCategoryNotes": [
+      "Focus on information that is directly relevant to potential therapy selection or clinical management. Avoid vague or redundant information like \"alert and oriented\".",
+      "CRITICAL: For genetic events, NEVER emit just a gene name (e.g., \"SCN1A\"). ALWAYS include the variant type (e.g., \"SCN1A mutation\"). A bare gene name is not an actionable event — the variant type determines whether it is targetable."
+    ],
+    "fewShotExample": {
+      "caseNoteInput": "8-year-old girl with drug-resistant epilepsy since infancy, presenting with generalized tonic-clonic seizures and frequent myoclonic jerks. EEG shows generalized epileptiform discharges. Genetic panel reveals a pathogenic SCN1A mutation, confirming a diagnosis of Dravet syndrome.",
+      "expectedOutput": "\"SCN1A mutation\" \"generalized tonic-clonic seizures\" \"epileptiform discharges\""
+    },
+    "guidanceNotes": [
+      "**Focus on Actionable Events:** We are not trying to summarize the case but to find what information is relevant to decision-making. This helps filter noise and focus on clinically significant findings.",
+      "**Prioritization:** Prioritizing genotype-driven studies ensures searches are matched to the patient's specific neurological or neurogenetic condition.",
+      "**Specific Search Terms:** Using exact terms such as \"SCN1A mutation\" is essential for precision. Adding \"therapy\", \"treatment\" or \"clinical trials\" helps to find relevant studies.",
+      "**Combinations:** Combining genetic and clinical/imaging features allows for refined searches that might be more relevant to the patient.",
+      "**Iteration:** If initial search results are not helpful, we can modify and refine the queries based on the available data."
+    ]
+  },
+
+  "articleScoring": {
+    "evaluationGoal": "evaluate full research articles related to neurological disease, especially those concerning genetic or structural neurological conditions, to identify potential advancements in treatment and understanding of the disease",
+    "domainFilterField": {
+      "key": "neuro_focus",
+      "label": "Neurological Focus",
+      "description": "Whether the article relates to a neurological condition"
+    },
+    "perMatchedEventPoints": 15,
+    "journalImpactMultiplier": 5,
+    "journalImpactCap": 25,
+    "yearDecayRate": 5,
+    "clinicalTrialBonus": 40,
+    "reviewPenalty": 5,
+    "citationImpactMultiplier": 5,
+    "citationImpactCap": 25,
+    "fields": [
+      {
+        "key": "disease_match",
+        "label": "Disease Match",
+        "points": 50,
+        "description": "Set to true if the article's disease focus matches the patient's disease. Articles that cover the exact condition in question receive significant points.",
+        "optional": false
+      },
+      {
+        "key": "drugs_tested",
+        "label": "Drugs Tested",
+        "points": 5,
+        "description": "Whether any drugs are mentioned as tested",
+        "optional": false
+      },
+      {
+        "key": "treatment_shown",
+        "label": "Treatment Results",
+        "points": 50,
+        "description": "Set to true if the article demonstrates positive treatment results",
+        "optional": false
+      },
+      {
+        "key": "cell_studies",
+        "label": "Cell Studies",
+        "points": 5,
+        "description": "Whether drugs were tested on cells in vitro",
+        "optional": false
+      },
+      {
+        "key": "mice_studies",
+        "label": "Animal Model Studies",
+        "points": 10,
+        "description": "Whether drugs were tested in animal models",
+        "optional": false
+      },
+      {
+        "key": "case_report",
+        "label": "Case Report",
+        "points": 5,
+        "description": "Whether the article presents a case report",
+        "optional": false
+      },
+      {
+        "key": "series_of_case_reports",
+        "label": "Series of Case Reports",
+        "points": 10,
+        "description": "Whether the article presents multiple case reports",
+        "optional": false
+      },
+      {
+        "key": "clinical_study",
+        "label": "Clinical Study",
+        "points": 15,
+        "description": "Whether the article describes a clinical study",
+        "optional": false
+      },
+      {
+        "key": "population_focus",
+        "label": "Pediatric Focus",
+        "points": 20,
+        "description": "Whether the article focuses specifically on pediatric neurological disease",
+        "optional": true
+      },
+      {
+        "key": "novelty",
+        "label": "Novelty",
+        "points": 10,
+        "description": "If the paper describes a novel mechanism or therapeutic strategy",
+        "optional": false
+      }
+    ]
+  },
+
+  "finalAnalysis": {
+    "personaRole": "neurologist"
+  },
+
+  "chatContextLabel": "neurology case involving a genetic or structural neurological condition"
+}

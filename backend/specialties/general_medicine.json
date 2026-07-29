@@ -1,0 +1,149 @@
+{
+  "id": "general-medicine",
+  "label": "General Medicine",
+  "description": "General internal medicine cases that do not clearly fit a single organ-system specialty, covering common symptoms, lab abnormalities, comorbidities, and medication history. Used as the default when a case doesn't clearly match a more specific specialty.",
+
+  "personaTitle": "internal medicine physician",
+  "boardName": null,
+
+  "diseaseExtraction": {
+    "guidance": null,
+    "fewShotExamples": [
+      {
+        "input": "55-year-old man presents with fatigue, unintentional weight loss, and generalized lymphadenopathy of unclear etiology, pending further workup...",
+        "output": "Fatigue and lymphadenopathy of unclear etiology"
+      },
+      {
+        "input": "68-year-old woman with poorly controlled type 2 diabetes and new-onset peripheral neuropathy...",
+        "output": "Type 2 diabetes with peripheral neuropathy"
+      },
+      {
+        "input": "40-year-old man with recurrent fevers, joint pain, and elevated inflammatory markers, evaluated for possible autoimmune disease...",
+        "output": "Fever and arthralgia of unclear etiology, evaluated for autoimmune disease"
+      }
+    ]
+  },
+
+  "eventExtraction": {
+    "categoryIntro": "Extract all clinically relevant and actionable events in the following categories:",
+    "categories": [
+      {
+        "name": "Symptoms and clinical findings",
+        "block": "**Category 1 — Symptoms and clinical findings:**\n\"fatigue\", \"unintentional weight loss\", \"joint pain\", \"generalized lymphadenopathy\""
+      },
+      {
+        "name": "Lab abnormalities",
+        "block": "**Category 2 — Lab abnormalities:**\n\"elevated CRP\", \"anemia\", \"elevated HbA1c\""
+      },
+      {
+        "name": "Comorbidities",
+        "block": "**Category 3 — Comorbidities:**\n\"type 2 diabetes\", \"hypertension\", \"chronic kidney disease\""
+      },
+      {
+        "name": "Medication history",
+        "block": "**Category 4 — Medication history:**\n\"metformin\", \"lisinopril\", \"prior antibiotic course\""
+      }
+    ],
+    "postCategoryNotes": [
+      "Focus on information that is directly relevant to differential diagnosis or clinical management. Avoid vague or redundant information like \"patient appears well\"."
+    ],
+    "fewShotExample": {
+      "caseNoteInput": "55-year-old man presents with a 3-month history of fatigue, unintentional 10-lb weight loss, and low-grade fevers. Exam reveals generalized lymphadenopathy. Labs show mild anemia and elevated CRP. Past medical history includes hypertension, managed with lisinopril.",
+      "expectedOutput": "\"fatigue\" \"unintentional weight loss\" \"generalized lymphadenopathy\" \"elevated CRP\" \"hypertension\" \"lisinopril\""
+    },
+    "guidanceNotes": [
+      "**Focus on Actionable Events:** We are not trying to summarize the case but to find what information is relevant to decision-making. This helps filter noise and focus on clinically significant findings.",
+      "**Specific Search Terms:** Using exact clinical terms is essential for precision. Adding \"differential diagnosis\", \"management\" or \"guidelines\" helps to find relevant studies.",
+      "**Combinations:** Combining symptoms, lab findings, and comorbidities allows for refined searches that might be more relevant to the patient.",
+      "**Iteration:** If initial search results are not helpful, we can modify and refine the queries based on the available data."
+    ]
+  },
+
+  "articleScoring": {
+    "evaluationGoal": "evaluate full research articles related to internal medicine, especially those concerning differential diagnosis and management of complex or undifferentiated presentations, to identify potential advancements in diagnosis and treatment",
+    "domainFilterField": {
+      "key": "clinical_focus",
+      "label": "Clinical Focus",
+      "description": "Whether the article relates to a relevant internal medicine condition or diagnostic approach"
+    },
+    "perMatchedEventPoints": 15,
+    "journalImpactMultiplier": 5,
+    "journalImpactCap": 25,
+    "yearDecayRate": 5,
+    "clinicalTrialBonus": 40,
+    "reviewPenalty": 5,
+    "citationImpactMultiplier": 5,
+    "citationImpactCap": 25,
+    "fields": [
+      {
+        "key": "disease_match",
+        "label": "Disease Match",
+        "points": 50,
+        "description": "Set to true if the article's clinical focus matches the patient's condition. Articles that cover the exact condition in question receive significant points.",
+        "optional": false
+      },
+      {
+        "key": "drugs_tested",
+        "label": "Drugs Tested",
+        "points": 5,
+        "description": "Whether any drugs or interventions are mentioned as tested",
+        "optional": false
+      },
+      {
+        "key": "treatment_shown",
+        "label": "Treatment Results",
+        "points": 50,
+        "description": "Set to true if the article demonstrates positive treatment or diagnostic results",
+        "optional": false
+      },
+      {
+        "key": "cell_studies",
+        "label": "Cell Studies",
+        "points": 5,
+        "description": "Whether interventions were tested on cells in vitro",
+        "optional": false
+      },
+      {
+        "key": "mice_studies",
+        "label": "Animal Model Studies",
+        "points": 10,
+        "description": "Whether interventions were tested in animal models",
+        "optional": false
+      },
+      {
+        "key": "case_report",
+        "label": "Case Report",
+        "points": 5,
+        "description": "Whether the article presents a case report",
+        "optional": false
+      },
+      {
+        "key": "series_of_case_reports",
+        "label": "Series of Case Reports",
+        "points": 10,
+        "description": "Whether the article presents multiple case reports",
+        "optional": false
+      },
+      {
+        "key": "clinical_study",
+        "label": "Clinical Study",
+        "points": 15,
+        "description": "Whether the article describes a clinical study",
+        "optional": false
+      },
+      {
+        "key": "novelty",
+        "label": "Novelty",
+        "points": 10,
+        "description": "If the paper describes a novel diagnostic approach or management strategy",
+        "optional": false
+      }
+    ]
+  },
+
+  "finalAnalysis": {
+    "personaRole": "internal medicine physician"
+  },
+
+  "chatContextLabel": "general internal medicine case"
+}

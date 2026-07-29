@@ -23,16 +23,18 @@ import Footer from './components/Footer';
 import LoadingSpinner from './components/LoadingSpinner';
 import FeedbackButton from './components/Feedback/FeedbackButton';
 import FeedbackModal from './components/Feedback/FeedbackModal';
+import EvidenceWeightsReview from './components/EvidenceWeightsReview';
 
 // Hooks
 import { useAuth } from './hooks/useAuth';
 import useChat from './hooks/useChat';
 
 // API
-import { generateSampleCase, extractDisease, extractEvents, retrieveAndAnalyzeArticles, generateFinalAnalysis, sendFeedback } from './utils/api';
+import { generateSampleCase, extractDisease, extractEvents, retrieveAndAnalyzeArticles, generateFinalAnalysis, sendFeedback, detectSpecialty } from './utils/api';
+import { getSpecialtyById } from './firebase';
 
 // Preset Data
-import { extractionPrompt, promptContent, presetCaseNotes, presetLabResults } from './data/presetData';
+import { presetCaseNotes, presetLabResults } from './data/presetData';
 
 // Utilities
 const createMessageId = (type) => `${Date.now()}-${type}-${Math.random().toString(36).substr(2, 9)}`;
@@ -57,7 +59,6 @@ const MedicalAssistantUI = () => {
   const [numArticles, setNumArticles] = useState(15);
   const [caseNotes, setCaseNotes] = useState('');
   const [labResults, setLabResults] = useState('');
-  const [currentPromptContent, setCurrentPromptContent] = useState(promptContent);
   const [isNewChat, setIsNewChat] = useState(true);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [justExtracted, setJustExtracted] = useState(false);
@@ -84,6 +85,22 @@ const handleSidebarToggle = () => {
     setShowUserMenu(prevState => !prevState);
   };
   
+  // Auto-detected specialty persona for the current case -- see
+  // docs/auto-specialty-detection-plan.md at the repo root. Set once per
+  // case by handleExtract, before extractDisease/extractEvents run (those
+  // two calls need to know the specialty already, since their prompts are
+  // specialty-driven).
+  const [detectedSpecialty, setDetectedSpecialty] = useState(null);
+
+  // Full specialty config (persona + articleScoring rubric) for the
+  // detected specialty, and the doctor's per-case scoring-weight
+  // overrides -- see docs/evidence-weighting-plan-v1.md at the repo root.
+  // Retrieval is gated on weightsConfirmed so the doctor sees the weights
+  // panel before papers are fetched.
+  const [detectedSpecialtyConfig, setDetectedSpecialtyConfig] = useState(null);
+  const [weightOverrides, setWeightOverrides] = useState(null);
+  const [weightsConfirmed, setWeightsConfirmed] = useState(false);
+
   const {
     chatHistory,
     isLoadingDocs,
@@ -95,7 +112,7 @@ const handleSidebarToggle = () => {
     handleSendMessage,
     initializeNewChat,
     initializeActiveChat
-  } = useChat(user);
+  } = useChat(user, detectedSpecialty?.specialtyId);
 
   const hasDocumentMessages = useMemo(() => 
     chatHistory.some(msg => msg.type === 'document' || msg.documents),
@@ -107,6 +124,25 @@ const handleSidebarToggle = () => {
     setCaseNotes('');
     setLabResults('');
     setIsLoadingFromHistory(true);
+    // Reset everything tied to whichever case was previously active --
+    // without this, starting a new chat (or picking a different one from
+    // history) left weightsConfirmed/weightOverrides/detectedSpecialty
+    // stuck from the last case, which silently skipped the evidence-weights
+    // picker for the new case and reused the old case's weights.
+    setExtractedDisease('');
+    setExtractedEvents([]);
+    setDetectedSpecialty(null);
+    setDetectedSpecialtyConfig(null);
+    setWeightOverrides(null);
+    setWeightsConfirmed(false);
+    setArticles([]);
+    setCurrentProgress('');
+    setPmcids([]);
+    setTotalArticles(0);
+    setCurrentArticleData(null);
+    setJustExtracted(false);
+    setShouldRetrieve(false);
+    retrievalAttemptedRef.current = false;
     originalHandleChatSelect(chat);
   };
 
@@ -167,10 +203,25 @@ const handleExtract = async () => {
       labResults
     ].join('\n\n');
 
+    console.log('[CHAT_DEBUG] Detecting specialty from case notes');
+    const detected = await detectSpecialty(combinedNotes);
+    console.log('[CHAT_DEBUG] Detected specialty:', detected);
+    setDetectedSpecialty(detected);
+
+    // Fetch the full specialty config so the evidence-weights panel can
+    // show sliders defaulting to this specialty's configured scoring
+    // values. See docs/evidence-weighting-plan-v1.md at the repo root.
+    try {
+      const config = await getSpecialtyById(detected.specialtyId);
+      setDetectedSpecialtyConfig(config);
+    } catch (error) {
+      console.error('[CHAT_DEBUG] Error fetching specialty config:', error);
+    }
+
     console.log('[CHAT_DEBUG] Extracting disease and events from notes');
     const [disease, events] = await Promise.all([
-      extractDisease(combinedNotes),
-      extractEvents(combinedNotes, extractionPrompt)
+      extractDisease(combinedNotes, detected.specialtyId),
+      extractEvents(combinedNotes, detected.specialtyId)
     ]);
     console.log('[CHAT_DEBUG] Extraction results:', { disease, events });
     setExtractedDisease(disease);
@@ -216,6 +267,10 @@ const handleExtract = async () => {
     setLabResults('');
     setExtractedDisease('');
     setExtractedEvents([]);
+    setDetectedSpecialty(null);
+    setDetectedSpecialtyConfig(null);
+    setWeightOverrides(null);
+    setWeightsConfirmed(false);
     setIsBox2Hovered(false);
     setIsBox3Hovered(false);
     setArticles([]);
@@ -232,7 +287,13 @@ const handleExtract = async () => {
     setTimeout(() => {
       console.log('[CLEAR_DEBUG] After timeout - caseNotes:', caseNotes, 'labResults:', labResults);
     }, 0);
-  }, [setCaseNotes, setLabResults, setExtractedDisease, setExtractedEvents, initializeNewChat, caseNotes, labResults]);
+  }, [setCaseNotes, setLabResults, setExtractedDisease, setExtractedEvents, setDetectedSpecialty, setDetectedSpecialtyConfig, setWeightOverrides, setWeightsConfirmed, initializeNewChat, caseNotes, labResults]);
+
+  const handleConfirmWeights = useCallback((weights) => {
+    console.log('[WEIGHTS_DEBUG] Doctor confirmed evidence weights:', weights);
+    setWeightOverrides(weights);
+    setWeightsConfirmed(true);
+  }, []);
 
   const handleRetrieve = async () => {
     console.log('Retrieval triggered. Conditions:', {
@@ -276,7 +337,7 @@ const handleExtract = async () => {
       await retrieveAndAnalyzeArticles(
         extractedDisease,
         extractedEvents,
-        promptContent,
+        detectedSpecialty?.specialtyId,
         async (data) => {
           if (data.type === 'metadata') {
             if (data.data.status === 'processing') {
@@ -328,7 +389,8 @@ const handleExtract = async () => {
                   combinedNotes,
                   extractedDisease,
                   extractedEvents,
-                  processedArticles
+                  processedArticles,
+                  detectedSpecialty?.specialtyId
                 );
               
                 // Send the analysis as a separate message
@@ -388,7 +450,8 @@ const handleExtract = async () => {
             }
           }
         },
-        numArticles // Pass numArticles to the API function
+        numArticles, // Pass numArticles to the API function
+        weightOverrides
       );
     } catch (error) {
       console.error('[RETRIEVE_DEBUG] Error:', error);
@@ -401,15 +464,16 @@ const handleExtract = async () => {
   };
 
 useEffect(() => {
-  if (justExtracted && 
-      extractedDisease && 
-      extractedEvents.length > 0 && 
-      !isRetrieving && 
-      !isProcessingArticles && 
+  if (justExtracted &&
+      extractedDisease &&
+      extractedEvents.length > 0 &&
+      !isRetrieving &&
+      !isProcessingArticles &&
       !hasDocumentMessages &&
       (caseNotes || labResults) &&
       !retrievalAttemptedRef.current &&
-      shouldRetrieve) {
+      shouldRetrieve &&
+      weightsConfirmed) {
     console.log('[RETRIEVAL_DEBUG] Conditions met for retrieval');
     retrievalAttemptedRef.current = true;
     handleRetrieve();
@@ -425,10 +489,11 @@ useEffect(() => {
       hasDocumentMessages,
       hasCaseNotesOrLabResults: !!(caseNotes || labResults),
       retrievalAttempted: retrievalAttemptedRef.current,
-      shouldRetrieve
+      shouldRetrieve,
+      weightsConfirmed
     });
   }
-}, [justExtracted, extractedDisease, extractedEvents, isRetrieving, isProcessingArticles, hasDocumentMessages, isNewChat, caseNotes, labResults, shouldRetrieve]);
+}, [justExtracted, extractedDisease, extractedEvents, isRetrieving, isProcessingArticles, hasDocumentMessages, isNewChat, caseNotes, labResults, shouldRetrieve, weightsConfirmed]);
 
   if (loading) {
     return (
@@ -483,6 +548,11 @@ useEffect(() => {
 
         <div className="ml-12 flex-1 flex w-full overflow-hidden">
           <MainPanel
+          detectedSpecialty={detectedSpecialty}
+          detectedSpecialtyConfig={detectedSpecialtyConfig}
+          weightsConfirmed={weightsConfirmed}
+          weightOverrides={weightOverrides}
+          onConfirmWeights={handleConfirmWeights}
           extractedDisease={extractedDisease}
           extractedEvents={extractedEvents}
           setExtractedDisease={setExtractedDisease}
@@ -515,8 +585,6 @@ useEffect(() => {
           setIsBox3Hovered={setIsBox3Hovered}
           isPromptExpanded={isPromptExpanded}
           setIsPromptExpanded={setIsPromptExpanded}
-          promptContent={currentPromptContent}
-          setPromptContent={setCurrentPromptContent}
           handleClearAll={handleClearAll}
           justExtracted={justExtracted}
           setJustExtracted={setJustExtracted}

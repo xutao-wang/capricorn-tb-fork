@@ -1,0 +1,147 @@
+{
+  "id": "adult-oncology",
+  "label": "Adult Oncology",
+  "description": "Adult solid tumors and cancers, including lung, breast, and colorectal cancer, with a focus on targeted and precision therapies guided by genomic alterations.",
+
+  "personaTitle": "oncologist",
+  "boardName": null,
+
+  "diseaseExtraction": {
+    "guidance": null,
+    "fewShotExamples": [
+      {
+        "input": "68-year-old male with stage IV non-small cell lung cancer (NSCLC), EGFR exon 19 deletion positive, progressed on osimertinib after 14 months...",
+        "output": "Non-small cell lung cancer (NSCLC)"
+      },
+      {
+        "input": "55-year-old woman with metastatic HER2-positive breast cancer, prior trastuzumab and pertuzumab, now with new liver metastases...",
+        "output": "HER2-positive breast cancer"
+      },
+      {
+        "input": "61-year-old man with metastatic colorectal cancer, KRAS G12C mutant, microsatellite stable, progressed on FOLFOX...",
+        "output": "Metastatic colorectal cancer"
+      }
+    ]
+  },
+
+  "eventExtraction": {
+    "categoryIntro": "Extract all clinically relevant and actionable events in the following categories:",
+    "categories": [
+      {
+        "name": "Genomic alterations",
+        "block": "**Category 1 — Genomic alterations (ALWAYS include the alteration type):**\nDo NOT output a bare gene name. ALWAYS append the alteration type.\n*  Mutations: \"EGFR exon 19 deletion\", \"KRAS G12C mutation\", \"BRAF V600E mutation\"\n*  Fusions: \"ALK fusion\", \"ROS1 fusion\", \"NTRK fusion\"\n*  Amplifications: \"HER2 amplification\", \"MET amplification\"\n*  Biomarkers: \"PD-L1 expression\", \"MSI-H\", \"TMB-high\""
+      },
+      {
+        "name": "Prior therapy exposure",
+        "block": "**Category 2 — Prior therapy exposure:**\nExtract prior drugs or regimens the patient has already received, since these are essential for identifying resistance mechanisms and next-line options. Examples: \"osimertinib\", \"trastuzumab\", \"FOLFOX\""
+      },
+      {
+        "name": "Disease stage / metastatic sites",
+        "block": "**Category 3 — Disease stage / metastatic sites:**\n\"Stage IV\", \"liver metastases\", \"brain metastases\", \"bone metastases\""
+      }
+    ],
+    "postCategoryNotes": [
+      "Focus on information that is directly relevant to potential therapy selection or clinical management. Avoid vague or redundant information like \"good performance status\".",
+      "CRITICAL: For genomic events, NEVER emit just a gene name (e.g., \"EGFR\"). ALWAYS include the alteration type (e.g., \"EGFR exon 19 deletion\"). A bare gene name is not an actionable event — the alteration type determines whether it is targetable."
+    ],
+    "fewShotExample": {
+      "caseNoteInput": "68-year-old male with stage IV non-small cell lung cancer (NSCLC), EGFR exon 19 deletion positive, progressed on osimertinib after 14 months. Restaging CT showed new liver metastases. Repeat biopsy revealed acquired MET amplification. PD-L1 expression 40%.",
+      "expectedOutput": "\"EGFR exon 19 deletion\" \"osimertinib\" \"MET amplification\" \"liver metastases\" \"PD-L1 expression 40%\""
+    },
+    "guidanceNotes": [
+      "**Focus on Actionable Events:** We are not trying to summarize the case but to find what information is relevant to decision-making. This helps filter noise and focus on clinically significant findings.",
+      "**Prioritization:** Prioritizing biomarker-driven and resistance-mechanism studies ensures searches are matched to the patient's specific molecular profile and treatment history.",
+      "**Specific Search Terms:** Using exact terms such as \"EGFR exon 19 deletion\" is essential for precision. Adding \"resistance\", \"treatment\" or \"clinical trials\" helps to find relevant studies.",
+      "**Combinations:** Combining genomic and treatment-history features allows for refined searches that might be more relevant to the patient.",
+      "**Iteration:** If initial search results are not helpful, we can modify and refine the queries based on the available data."
+    ]
+  },
+
+  "articleScoring": {
+    "evaluationGoal": "evaluate full research articles related to oncology, especially those concerning targeted and precision therapies, to identify potential advancements in treatment and understanding of the disease",
+    "domainFilterField": {
+      "key": "cancer_focus",
+      "label": "Cancer Focus",
+      "description": "Whether the article relates to cancer"
+    },
+    "perMatchedEventPoints": 15,
+    "journalImpactMultiplier": 5,
+    "journalImpactCap": 25,
+    "yearDecayRate": 5,
+    "clinicalTrialBonus": 40,
+    "reviewPenalty": 5,
+    "citationImpactMultiplier": 5,
+    "citationImpactCap": 25,
+    "fields": [
+      {
+        "key": "disease_match",
+        "label": "Disease Match",
+        "points": 50,
+        "description": "Set to true if the article's disease focus matches the patient's disease. Articles that cover the exact disease in question receive significant points.",
+        "optional": false
+      },
+      {
+        "key": "drugs_tested",
+        "label": "Drugs Tested",
+        "points": 5,
+        "description": "Whether any drugs are mentioned as tested",
+        "optional": false
+      },
+      {
+        "key": "treatment_shown",
+        "label": "Treatment Results",
+        "points": 50,
+        "description": "Set to true if the article demonstrates positive treatment results",
+        "optional": false
+      },
+      {
+        "key": "cell_studies",
+        "label": "Cell Studies",
+        "points": 5,
+        "description": "Whether drugs were tested on cells in vitro",
+        "optional": false
+      },
+      {
+        "key": "mice_studies",
+        "label": "Mice Studies",
+        "points": 10,
+        "description": "Whether drugs were tested on mice/PDX models",
+        "optional": false
+      },
+      {
+        "key": "case_report",
+        "label": "Case Report",
+        "points": 5,
+        "description": "Whether the article presents a case report",
+        "optional": false
+      },
+      {
+        "key": "series_of_case_reports",
+        "label": "Series of Case Reports",
+        "points": 10,
+        "description": "Whether the article presents multiple case reports",
+        "optional": false
+      },
+      {
+        "key": "clinical_study",
+        "label": "Clinical Study",
+        "points": 15,
+        "description": "Whether the article describes a clinical study",
+        "optional": false
+      },
+      {
+        "key": "novelty",
+        "label": "Novelty",
+        "points": 10,
+        "description": "If the paper describes a novel mechanism or therapeutic strategy",
+        "optional": false
+      }
+    ]
+  },
+
+  "finalAnalysis": {
+    "personaRole": "medical oncologist"
+  },
+
+  "chatContextLabel": "oncology case involving targeted or precision therapy"
+}

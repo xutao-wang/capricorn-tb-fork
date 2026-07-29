@@ -26,8 +26,6 @@ const AnalysisSection = ({
   setIsBox3Hovered,
   isPromptExpanded = false,
   setIsPromptExpanded,
-  promptContent,
-  setPromptContent,
   currentProgress,
   numArticles,
   setNumArticles,
@@ -125,15 +123,6 @@ useEffect(() => {
       </div>
       {isPromptExpanded && (
         <div className="flex flex-col gap-2">
-          <div className="flex items-start gap-2">
-            <label className="text-[10px] font-light text-gray-700 w-20 pt-1.5">Analysis instructions</label>
-            <textarea
-              className="flex-1 p-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-xs h-[9rem]"
-              value={promptContent}
-              onChange={(e) => setPromptContent(e.target.value)}
-              placeholder="Enter prompt content here..."
-            />
-          </div>
           <div className="flex items-center gap-2">
             <label className="text-[10px] font-light text-gray-700 w-20"># of articles</label>
             <input

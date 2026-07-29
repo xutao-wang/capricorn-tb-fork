@@ -14,19 +14,20 @@
 
 // src/utils/api.js
 
-export const retrieveAndAnalyzeArticles = async (disease, events, methodologyContent, onProgress, numArticles = 15) => {
+export const retrieveAndAnalyzeArticles = async (disease, events, specialtyId, onProgress, numArticles = 15, weightOverrides) => {
   try {
     // Step 1: Get PMIDs and analysis from first cloud function
-    const response = await fetch(`https://us-central1-gemini-med-lit-review.cloudfunctions.net/retrieve-full-articles-live-pmc-text-embeddings-005`, {
+    const response = await fetch(`https://retrieve-full-articles-live-pmc-text-embedding-00-podljswina-uc.a.run.app`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         events_text: events.join('\n'),
-        methodology_content: methodologyContent,
+        specialtyId: specialtyId,
         disease: disease,
-        num_articles: numArticles
+        num_articles: numArticles,
+        weightOverrides: weightOverrides
       }),
     });
 
@@ -76,9 +77,9 @@ export const retrieveAndAnalyzeArticles = async (disease, events, methodologyCon
 
 const API_BASE_URL = 'https://sfslkz5uiq-uc.a.run.app';
 
-export const streamChat = async (message, userId, chatId, onChunk) => {
+export const streamChat = async (message, userId, chatId, onChunk, specialtyId) => {
   try {
-    const response = await fetch(`https://us-central1-gemini-med-lit-review.cloudfunctions.net/capricorn-chat`, {
+    const response = await fetch(`https://chat-podljswina-uc.a.run.app`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -86,7 +87,8 @@ export const streamChat = async (message, userId, chatId, onChunk) => {
       body: JSON.stringify({
         message,
         userId,
-        chatId
+        chatId,
+        specialtyId
       }),
     });
 
@@ -135,7 +137,7 @@ const GENERATE_CASE_URL = process.env.REACT_APP_GENERATE_CASE_URL;
  */
 export const redactSensitiveInfo = async (text) => {
   try {
-    const response = await fetch(`https://us-central1-gemini-med-lit-review.cloudfunctions.net/capricorn-redact-sensitive-info`, {
+    const response = await fetch(`https://redact-sensitive-info-podljswina-uc.a.run.app`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -156,14 +158,38 @@ export const redactSensitiveInfo = async (text) => {
   }
 };
 
-export const extractDisease = async (text) => {
+// Detects which specialty persona should analyze this case, before any
+// specialty-driven extraction runs. See docs/auto-specialty-detection-plan.md
+// at the repo root.
+export const detectSpecialty = async (text) => {
   try {
-    const response = await fetch(`https://us-central1-gemini-med-lit-review.cloudfunctions.net/pubmed-search-tester-extract-disease`, {
+    const response = await fetch(`https://detect-specialty-podljswina-uc.a.run.app`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ text }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json(); // { specialtyId, label, rationale }
+  } catch (error) {
+    console.error('Error detecting specialty:', error);
+    throw error;
+  }
+};
+
+export const extractDisease = async (text, specialtyId) => {
+  try {
+    const response = await fetch(`https://extract-disease-podljswina-uc.a.run.app`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text, specialtyId }),
     });
 
     if (!response.ok) {
@@ -178,14 +204,14 @@ export const extractDisease = async (text) => {
   }
 };
 
-export const extractEvents = async (text, promptContent) => {
+export const extractEvents = async (text, specialtyId) => {
   try {
-    const response = await fetch(`https://us-central1-gemini-med-lit-review.cloudfunctions.net/pubmed-search-tester-extract-events`, {
+    const response = await fetch(`https://extract-events-podljswina-uc.a.run.app`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ text: `${promptContent}\n\nCase input:\n${text}` }),
+      body: JSON.stringify({ text, specialtyId }),
     });
 
     if (!response.ok) {
@@ -309,7 +335,7 @@ export const deleteTemplate = async (templateId) => {
  * @param {Array} analyzedArticles - The analyzed articles with their metadata
  * @returns {Promise<Object>} - A promise that resolves to the final analysis object
  */
-export const generateFinalAnalysis = async (caseNotes, disease, events, analyzedArticles) => {
+export const generateFinalAnalysis = async (caseNotes, disease, events, analyzedArticles, specialtyId) => {
   try {
     console.log('LOADING_DEBUG: Starting final analysis request with:', {
       case_notes: caseNotes,
@@ -318,7 +344,7 @@ export const generateFinalAnalysis = async (caseNotes, disease, events, analyzed
       analyzed_articles: analyzedArticles
     });
 
-    const response = await fetch(`https://us-central1-gemini-med-lit-review.cloudfunctions.net/capricorn-final-analysis`, {
+    const response = await fetch(`https://capricorn-final-analysis-podljswina-uc.a.run.app`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -327,7 +353,8 @@ export const generateFinalAnalysis = async (caseNotes, disease, events, analyzed
         case_notes: caseNotes,
         disease,
         events,
-        analyzed_articles: analyzedArticles
+        analyzed_articles: analyzedArticles,
+        specialtyId
       })
     });
 
@@ -353,7 +380,7 @@ export const generateFinalAnalysis = async (caseNotes, disease, events, analyzed
  */
 export const sendFeedback = async (feedbackData) => {
   try {
-    const response = await fetch('https://capricorn-feedback-934163632848.us-central1.run.app', {
+    const response = await fetch('https://send-feedback-email-podljswina-uc.a.run.app', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -380,7 +407,7 @@ export const sendFeedback = async (feedbackData) => {
  */
 export const processLabPDF = async (pdfBase64) => {
   try {
-    const response = await fetch('https://capricorn-process-lab-934163632848.us-central1.run.app', {
+    const response = await fetch('https://process-lab-podljswina-uc.a.run.app', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
