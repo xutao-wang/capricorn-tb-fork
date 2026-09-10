@@ -1,0 +1,8 @@
+steps:
+- name: 'python:3.11-slim'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    pip install google-cloud-firestore
+    python seed_firestore.py --project-id onboarding-sandbox-477121 --database-id capricorn-prod

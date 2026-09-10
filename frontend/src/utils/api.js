@@ -432,3 +432,45 @@ export const processLabPDF = async (pdfBase64) => {
     throw new Error(`Failed to process lab PDF: ${error.message}`);
   }
 };
+
+/**
+ * Analyzes a medical thoracic image (DICOM, CXR, CT) using Gemini Multimodal Vision.
+ * Windowing and normalizations are handled on the backend.
+ *
+ * @param {string} imageBase64 - Base64 encoded image or DICOM data
+ * @param {string} fileName - Original file name (e.g. scan.dcm, cxr.png)
+ * @param {string} specialtyId - Specialty ID (defaults to 'tuberculosis')
+ * @returns {Promise<Object>} - Analysis result with structured findings, report text, and events
+ */
+export const analyzeMedicalImage = async (imageBase64, fileName = '', specialtyId = 'tuberculosis') => {
+  try {
+    const response = await fetch('https://analyze-medical-image-djejr2bj2q-uc.a.run.app', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        image_data: imageBase64,
+        file_name: fileName,
+        specialty_id: specialtyId,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.success) {
+      return result.data;
+    } else {
+      throw new Error(result.error || 'Failed to analyze medical image');
+    }
+  } catch (error) {
+    console.error('Error analyzing medical image:', error);
+    throw new Error(`Failed to analyze medical image: ${error.message}`);
+  }
+};
+

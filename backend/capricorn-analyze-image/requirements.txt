@@ -1,0 +1,6 @@
+functions-framework==3.*
+Flask==3.1.0
+google-genai
+pydicom==2.4.4
+pillow>=10.2.0
+numpy>=1.24.0

@@ -13,12 +13,20 @@
 // limitations under the License.
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { redactSensitiveInfo, processLabPDF } from '../../utils/api';
+import { redactSensitiveInfo, processLabPDF, analyzeMedicalImage } from '../../utils/api';
 import LoadingSpinner from '../LoadingSpinner';
-import { presetCaseNotes, presetLabResults } from '../../data/presetData';
-import { Mic, MicOff, AlertTriangle, ArrowRight, Upload } from 'lucide-react';
+import {
+  presetCaseNotes,
+  presetLabResults,
+  presetTBCaseNotes,
+  presetTBLabResults,
+  presetTBFindings
+} from '../../data/presetData';
+import { Mic, MicOff, AlertTriangle, ArrowRight, Upload, FileImage, Sparkles, ChevronDown } from 'lucide-react';
 import useDebounce from '../../hooks/useDebounce';
 import LabInputModal from '../Modal/LabInputModal';
+import ImageInputModal from '../Modal/ImageInputModal';
+import RadiologyFindingsCard from './RadiologyFindingsCard';
 
 // Define the SpeechRecognition interface
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -48,6 +56,15 @@ const CaseInputSection = ({
   const [isProcessingPDF, setIsProcessingPDF] = useState(false);
   const [pdfFileName, setPdfFileName] = useState('');
   const [showLabInputChoiceModal, setShowLabInputChoiceModal] = useState(false);
+
+  // Multimodal Medical Imaging States
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
+  const [imageFindings, setImageFindings] = useState(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
+  const [imageFileName, setImageFileName] = useState('');
+  const [showExampleMenu, setShowExampleMenu] = useState(false);
+
   const caseNotesRef = useRef(null);
   const labResultsRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -377,6 +394,10 @@ const CaseInputSection = ({
     setHasInput(false);
     setInterimTranscript('');
     setFocusedInput('caseNotes');
+    setImageFindings(null);
+    setImagePreviewUrl(null);
+    setImageFileName('');
+    setShowExampleMenu(false);
     if (isListening) {
       recognitionRef.current.stop();
       setIsListening(false);
@@ -401,22 +422,108 @@ const CaseInputSection = ({
     console.log('[CLEAR_DEBUG] State changed - localCaseNotes:', localCaseNotes, 'localLabResults:', localLabResults, 'hasInput:', hasInput);
   }, [localCaseNotes, localLabResults, hasInput]);
 
-  const handleExampleClick = () => {
+  const handleLoadLeukemiaExample = () => {
+    setShowExampleMenu(false);
+    setImageFindings(null);
+    setImagePreviewUrl(null);
+    setImageFileName('');
+
     setLocalCaseNotes(presetCaseNotes);
     setLocalLabResults(presetLabResults);
     setCaseNotes(presetCaseNotes);
     setLabResults(presetLabResults);
     setShowLabResults(true);
     setHasInput(true);
-    
+
     setTimeout(() => {
       adjustAllTextareas();
-    }, 0);
-    
+    }, 50);
+
     if (typeof handleExampleLoad === 'function') {
       handleExampleLoad(presetCaseNotes, presetLabResults);
     }
   };
+
+  const handleLoadSampleTBCXR = () => {
+    setShowExampleMenu(false);
+    setShowImageModal(false);
+    setImageFileName('sample_tb_cxr.jpg');
+    setImagePreviewUrl('/sample_tb_cxr.jpg');
+    setImageFindings(presetTBFindings);
+
+    setLocalCaseNotes(presetTBCaseNotes);
+    setLocalLabResults(presetTBLabResults);
+    setCaseNotes(presetTBCaseNotes);
+    setLabResults(presetTBLabResults);
+    setShowLabResults(true);
+    setHasInput(true);
+
+    setTimeout(() => {
+      adjustAllTextareas();
+    }, 50);
+
+    if (typeof handleExampleLoad === 'function') {
+      handleExampleLoad(presetTBCaseNotes, presetTBLabResults);
+    }
+  };
+
+  const handleExampleClick = () => {
+    setShowExampleMenu(prev => !prev);
+  };
+
+  const handleImageFileSelect = async (file) => {
+    setShowImageModal(false);
+    setImageFileName(file.name);
+    setError(null);
+    setIsAnalyzingImage(true);
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const base64Data = e.target.result.split(',')[1];
+          const result = await analyzeMedicalImage(base64Data, file.name, 'tuberculosis');
+
+          setImageFindings(result);
+          setImagePreviewUrl(result.previewImage || e.target.result);
+
+          const reportText = result.summaryText || result.primaryImpression;
+          if (reportText) {
+            setCaseNotes(prevNotes => {
+              const modalityLabel = result.metadata?.Modality ? `DICOM ${result.metadata.Modality}` : 'Thoracic Radiograph';
+              const newNotes = prevNotes.trim()
+                ? `${prevNotes}\n\n[Thoracic Imaging Findings (${modalityLabel})]:\n${reportText}`
+                : `[Thoracic Imaging Findings (${modalityLabel})]:\n${reportText}`;
+              setLocalCaseNotes(newNotes);
+              return newNotes;
+            });
+            setHasInput(true);
+          }
+
+          setTimeout(() => {
+            adjustAllTextareas();
+          }, 100);
+        } catch (err) {
+          console.error('Error analyzing medical image:', err);
+          setError(`Image analysis failed: ${err.message}`);
+        } finally {
+          setIsAnalyzingImage(false);
+        }
+      };
+
+      reader.onerror = () => {
+        setError('Failed to read image file');
+        setIsAnalyzingImage(false);
+      };
+
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Error reading image file:', err);
+      setError('Failed to read image file');
+      setIsAnalyzingImage(false);
+    }
+  };
+
 
   const handleFileSelect = async (event) => {
     const file = event.target.files[0];
@@ -522,18 +629,34 @@ const CaseInputSection = ({
       />
       
       <div className="case-input-container bg-white border border-gray-200 rounded-xl p-4 sm:p-6 w-full flex flex-col transition-all duration-300 ease-in-out shadow-sm hover:shadow-md relative mb-8 mt-12" style={{ maxHeight: `${calculateContainerMaxHeight()}px` }}>
-      {(isRedacting || isProcessingPDF) && (
-        <div className="absolute top-0 left-0 right-0 bg-blue-100 bg-opacity-90 text-blue-700 px-2 py-1 text-xs z-10">
+      {(isRedacting || isProcessingPDF || isAnalyzingImage) && (
+        <div className="absolute top-0 left-0 right-0 bg-blue-100 bg-opacity-95 text-blue-800 px-3 py-1.5 text-xs z-20 flex items-center justify-between rounded-t-xl">
           <div className="flex items-center">
-            <svg className="animate-spin h-3 w-3 mr-1 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <svg className="animate-spin h-3.5 w-3.5 mr-2 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            {isProcessingPDF ? 'Processing lab report...' : 'Redacting sensitive information...'}
+            {isAnalyzingImage
+              ? 'Gemini Multimodal Vision is analyzing chest imaging (extracting cavitations, consolidations, drug resistance indicators)...'
+              : isProcessingPDF
+              ? 'Processing lab report...'
+              : 'Redacting sensitive information...'}
           </div>
         </div>
       )}
       <div className="flex-grow flex flex-col" style={{ overflowY: 'auto' }}>
+        {imageFindings && (
+          <RadiologyFindingsCard
+            findingsData={imageFindings}
+            previewUrl={imagePreviewUrl}
+            onRemove={() => {
+              setImageFindings(null);
+              setImagePreviewUrl(null);
+              setImageFileName('');
+            }}
+          />
+        )}
+
         <div className="relative">
           <textarea
             ref={caseNotesRef}
@@ -542,7 +665,7 @@ const CaseInputSection = ({
             onChange={handleCaseNotesChange}
             onFocus={handleCaseNotesFocus}
             onBlur={handleCaseNotesBlur}
-            placeholder="Please input your case notes"
+            placeholder="Please input your case notes or upload a chest radiograph / DICOM scan above"
             style={{ minHeight: '3em' }}
           />
         </div>
@@ -565,16 +688,25 @@ const CaseInputSection = ({
       
       <div className="flex flex-col sm:flex-row items-center justify-between mt-4 sm:mt-2 flex-shrink-0 relative">
         <div className="w-full sm:w-auto flex items-center justify-between mb-4 sm:mb-0">
-          <button
-            onClick={toggleLabResults}
-            className="flex items-center text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors duration-200"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={showLabResults ? "M20 12H4" : "M12 4v16m8-8H4"} />
-            </svg>
-            {showLabResults ? 'Hide lab results' : 'Add lab results'}
-          </button>
-          <div className="flex items-center ml-4 sm:ml-12">
+          <div className="flex items-center">
+            <button
+              onClick={toggleLabResults}
+              className="flex items-center text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors duration-200"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={showLabResults ? "M20 12H4" : "M12 4v16m8-8H4"} />
+              </svg>
+              {showLabResults ? 'Hide labs' : 'Add labs'}
+            </button>
+            <button
+              onClick={() => setShowImageModal(true)}
+              className="flex items-center text-indigo-600 hover:text-indigo-700 text-sm font-medium transition-colors duration-200 ml-4"
+            >
+              <FileImage className="h-4 w-4 mr-1.5" />
+              {imageFindings ? 'Update Scan' : 'Upload CXR / DICOM'}
+            </button>
+          </div>
+          <div className="flex items-center ml-4 sm:ml-8">
             <label htmlFor="numArticles" className="text-gray-600 hover:text-gray-800 text-sm font-medium transition-colors duration-200 mr-2"># of articles:</label>
             <input
               id="numArticles"
@@ -592,12 +724,38 @@ const CaseInputSection = ({
         </div>
         
         <div className="flex items-center space-x-4">
-          <button
-            onClick={handleExampleClick}
-            className="text-gray-600 hover:text-gray-800 text-sm font-medium transition-colors duration-200"
-          >
-            Example
-          </button>
+          <div className="relative">
+            <button
+              onClick={handleExampleClick}
+              className="flex items-center text-gray-600 hover:text-gray-800 text-sm font-medium transition-colors duration-200"
+            >
+              Example <ChevronDown className="w-3.5 h-3.5 ml-1" />
+            </button>
+            {showExampleMenu && (
+              <div className="absolute right-0 bottom-full mb-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-30 text-left animate-fadeIn">
+                <button
+                  onClick={handleLoadSampleTBCXR}
+                  className="w-full text-left px-3 py-2 hover:bg-blue-50 text-gray-800 flex items-center justify-between transition-colors"
+                >
+                  <div>
+                    <div className="font-semibold text-xs text-blue-700">Tuberculosis + CXR</div>
+                    <div className="text-[11px] text-gray-500">Cavitary MDR-TB & CXR scan</div>
+                  </div>
+                  <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-medium">TB Portals</span>
+                </button>
+                <button
+                  onClick={handleLoadLeukemiaExample}
+                  className="w-full text-left px-3 py-2 hover:bg-gray-50 text-gray-700 flex items-center justify-between border-t border-gray-100 transition-colors"
+                >
+                  <div>
+                    <div className="font-medium text-xs text-gray-800">Pediatric Leukemia</div>
+                    <div className="text-[11px] text-gray-500">KMT2A-rearranged AML</div>
+                  </div>
+                  <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium">iLTB</span>
+                </button>
+              </div>
+            )}
+          </div>
           <button
             onClick={handleClear}
             className="text-gray-600 hover:text-gray-800 text-sm font-medium transition-colors duration-200"
@@ -640,6 +798,14 @@ const CaseInputSection = ({
       onClose={handleModalClose}
       onUploadClick={handleModalUploadClick}
       onTextClick={handleModalTextClick}
+    />
+
+    {/* Medical Image / DICOM Input Modal */}
+    <ImageInputModal
+      isOpen={showImageModal}
+      onClose={() => setShowImageModal(false)}
+      onFileSelect={handleImageFileSelect}
+      onLoadSample={handleLoadSampleTBCXR}
     />
     </>
   );

@@ -86,6 +86,16 @@ LOCATION: "$VERTEX_REGION"
 EOF
 echo "✓ Created backend/capricorn-process-lab/.env.yaml"
 
+# Create capricorn-analyze-image/.env.yaml
+cat > backend/capricorn-analyze-image/.env.yaml << EOF
+# Environment variables for capricorn-analyze-image Cloud Function
+PROJECT_ID: "$PROJECT_ID"
+LOCATION: "$VERTEX_REGION"
+DATABASE_ID: "$DATABASE_ID"
+EOF
+echo "✓ Created backend/capricorn-analyze-image/.env.yaml"
+
+
 # Create capricorn-retrieve-full-articles/.env.yaml
 cat > backend/capricorn-retrieve-full-articles/.env.yaml << EOF
 # Environment variables for capricorn-retrieve-full-articles Cloud Function
