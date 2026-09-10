@@ -75,8 +75,8 @@ In Phase 1 of the Rutgers Health Infectious Disease & Data Science collaboration
 
 ## Prerequisites
 
-- Google Cloud Platform account with billing enabled (`onboarding-sandbox-477121`)
-- gcloud CLI installed and authenticated
+- Google Cloud Platform account with billing enabled
+- gcloud CLI installed and authenticated (`gcloud auth login`)
 - Node.js 18 or higher (for local frontend development)
 - Docker / Cloud Build (for container deployments)
 - SendGrid account (optional, for email feedback notifications)
@@ -88,17 +88,21 @@ In Phase 1 of the Rutgers Health Infectious Disease & Data Science collaboration
 To deploy the entire multimodal architecture to Google Cloud:
 
 ```bash
-# 1. Authenticate with gcloud
-gcloud auth login terellmoore@terellmoore.altostrat.com
+# 1. Set your GCP Project ID
+export PROJECT_ID="YOUR_PROJECT_ID"
+gcloud config set project $PROJECT_ID
 
-# 2. Run the automated deployment script
+# 2. Authenticate with gcloud
+gcloud auth login
+
+# 3. Run the automated deployment script
 ./deploy-tb-multimodal.sh
 ```
 
 This script automatically:
 1. Seeds all clinical specialty personas (including Tuberculosis) into Firestore (`capricorn-prod`).
 2. Deploys the `analyze-medical-image` Gen2 Cloud Function with `pydicom` and Gemini 2.5 Flash.
-3. Builds the frontend container with Cloud Build (`gcr.io/onboarding-sandbox-477121/medical-assistant:latest`).
+3. Builds the frontend container with Cloud Build (`gcr.io/${PROJECT_ID}/medical-assistant:latest`).
 4. Deploys the web application to Cloud Run with public invoker access.
 
 ---
@@ -672,10 +676,9 @@ Before deploying, you need to configure Firebase Authentication:
    - In "Authentication" → "Settings" tab (or Identity Platform settings)
    - Under "Authorized domains", ensure the following are present:
      - `localhost` (for local development)
-     - `medical-assistant-djejr2bj2q-uc.a.run.app` (Cloud Run production domain)
-     - `medical-assistant-190811640519.us-central1.run.app` (Cloud Run regional domain)
-     - `onboarding-sandbox-477121.firebaseapp.com`
-     - `onboarding-sandbox-477121.web.app`
+     - `YOUR_CLOUD_RUN_URL` (e.g. `medical-assistant-xxx-uc.a.run.app`)
+     - `YOUR_PROJECT_ID.firebaseapp.com`
+     - `YOUR_PROJECT_ID.web.app`
 
    **Important**: Any domain where your app is hosted must be added to this list, otherwise Google popup authentication will fail with an `auth/unauthorized-domain` error.
 
@@ -692,17 +695,17 @@ In production, the frontend is packaged as a Docker container running an Express
 1. **Build Container with Cloud Build**:
    ```bash
    gcloud builds submit frontend \
-     --project="onboarding-sandbox-477121" \
-     --tag="gcr.io/onboarding-sandbox-477121/medical-assistant:latest"
+     --project="$PROJECT_ID" \
+     --tag="gcr.io/${PROJECT_ID}/medical-assistant:latest"
    ```
 
 2. **Deploy Container to Cloud Run**:
    ```bash
    gcloud run deploy medical-assistant \
-     --image="gcr.io/onboarding-sandbox-477121/medical-assistant:latest" \
+     --image="gcr.io/${PROJECT_ID}/medical-assistant:latest" \
      --platform=managed \
      --region="us-central1" \
-     --project="onboarding-sandbox-477121" \
+     --project="$PROJECT_ID" \
      --port=8080 \
      --memory=512Mi \
      --cpu=1
@@ -712,7 +715,7 @@ In production, the frontend is packaged as a Docker container running an Express
    ```bash
    gcloud run services add-iam-policy-binding medical-assistant \
      --region="us-central1" \
-     --project="onboarding-sandbox-477121" \
+     --project="$PROJECT_ID" \
      --member="allUsers" \
      --role="roles/run.invoker"
    ```
