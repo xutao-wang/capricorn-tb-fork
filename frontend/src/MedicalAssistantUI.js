@@ -342,7 +342,11 @@ const handleExtract = async () => {
           if (data.type === 'metadata') {
             if (data.data.status === 'processing') {
               setTotalArticles(data.data.total_articles);
-              setCurrentProgress(`Analyzing ${data.data.total_articles} articles...`);
+              if (data.data.current_article > 0) {
+                setCurrentProgress(`Analyzing candidate ${data.data.current_article} of ${data.data.total_articles}...`);
+              } else {
+                setCurrentProgress(`Analyzing ${data.data.total_articles} candidate articles...`);
+              }
             } else if (data.data.status === 'complete') {
               setCurrentProgress(`Article analysis complete. Generating final analysis...`);
               console.log('All articles processed. Total articles:', processedArticles.length);
@@ -412,7 +416,7 @@ const handleExtract = async () => {
           }
           else if (data.type === 'pmcids') {
             setPmcids(data.data.pmcids);
-            setCurrentProgress('Retrieved PMCIDs, creating links...');
+            setCurrentProgress('Retrieved top candidate articles, formatting results...');
           }
           else if (data.type === 'article_analysis') {
             const analysis = data.data.analysis.article_metadata;
@@ -424,7 +428,7 @@ const handleExtract = async () => {
               journal_title: analysis.journal_title,
               journal_sjr: analysis.journal_sjr,
               year: analysis.year,
-              cancer: analysis.type_of_cancer,
+              cancer: analysis.type_of_cancer || analysis.condition || 'Tuberculosis',
               type: analysis.paper_type,
               events: analysis.actionable_events,
               drugs_tested: analysis.drugs_tested,

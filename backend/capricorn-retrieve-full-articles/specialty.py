@@ -40,7 +40,7 @@ def get_specialty(specialty_id=None):
     return doc.to_dict()
 
 
-def build_article_scoring_prompt(specialty, disease, events_text, journal_context, article_text):
+def build_article_scoring_prompt(specialty, disease, events_text, article_text, journal_context=None):
     persona_title = specialty['personaTitle']
     board_name = specialty.get('boardName')
     board_clause = f" and you are the chair of the {board_name}" if board_name else ""
@@ -50,37 +50,29 @@ def build_article_scoring_prompt(specialty, disease, events_text, journal_contex
     per_match_points = article_scoring['perMatchedEventPoints']
     fields = article_scoring['fields']
 
-    disease_line = f"\nThe patient's disease is: {disease}\n" if disease else ""
+    disease_line = f"\nThe patient's disease/condition is: {disease}\n" if disease else ""
     events_line = f"\nThe patient's actionable events are: {events_text}\n" if events_text else ""
 
     numbered_items = [
-        "**Title:** The title of the paper. (0 Points)",
-        "**Link:** A link to the paper. (0 Points)",
-        "**Year:** Publication year (0 Points)",
-        f"**{domain_field['label']}:** {domain_field['description']} (Boolean, true or false) "
-        "(0 Points, but essential for filtering).",
+        "**Title:** The title of the paper.",
+        "**Journal Title:** The publishing journal name.",
+        "**Year:** Publication year (e.g. '2023').",
+        f"**{domain_field['label']}:** {domain_field['description']} (Boolean, true or false).",
     ]
     for field in fields:
         optional_note = " Omit this field entirely if not applicable to this article's domain." if field.get('optional') else ""
         numbered_items.append(
-            f"**{field['label']}:** {field['description']} (Boolean true or false) "
-            f"(if true, +{field['points']} points).{optional_note}"
+            f"**{field['label']}:** {field['description']} (Boolean true or false).{optional_note}"
         )
     numbered_items.append(
-        "**Type of Cancer:** The specific type of cancer discussed "
-        "(string, example: Leukemia (AML, ALL), Neuroblastoma, etc.)."
+        "**Condition / Disease:** The specific condition, cancer type, or infectious disease discussed (string, e.g. 'Tuberculosis', 'Multidrug-Resistant Tuberculosis', 'AML', etc.)."
     )
     numbered_items.append(
-        "**Paper Type:** The type of study (e.g., clinical trial, case report, in vitro study, "
-        "review, retrospective study, biological rationale). (+40 points for clinical trial, "
-        "-5 points for review)"
+        "**Paper Type:** The type of study (e.g., clinical trial, case report, in vitro study, review, retrospective study, biological rationale)."
     )
     numbered_items.append(
-        "**Actionable Event:** Any specific actionable event mentioned in the paper. Each event "
-        "will be evaluated against the patient's extracted actionable events, and only matching "
-        f"events will receive points ({per_match_points} points per matching event)"
+        "**Actionable Events:** Specific clinical, imaging, microbiological, resistance, or genomic events mentioned in the paper and whether they match the patient's events (array of objects with 'event' and 'matches_query')."
     )
-    numbered_items.append("**Overall Points:** Sum of all points based on the above criteria. (Calculated by the output).")
 
     numbered_list = "\n".join(f"{i + 1}. {item}" for i, item in enumerate(numbered_items))
 
@@ -88,27 +80,21 @@ def build_article_scoring_prompt(specialty, disease, events_text, journal_contex
 
     return f"""You are an expert {persona_title}{board_clause}. Your goal is to {article_scoring['evaluationGoal']}.{disease_line}{events_line}
 
-Journal Impact Data (SJR scores):
-The following is a list of journal titles and their SJR scores. When extracting the journal title from the article, find the best matching title from this list and use its SJR score. If no match is found, use 0 as the SJR score.
-
-Journal Titles and Scores:
-{journal_context}
-
 <Article>
 {article_text}
 </Article>
 
 <Instructions>
-Your task is to read the provided full article and extract key information, and then assess the article's relevance and potential impact. You will generate a JSON object containing metadata and a point-based assessment of the article's value. Please use a consistent JSON structure.
+Your task is to read the provided full article and extract key information to assess the article's clinical relevance and potential impact. You will generate a JSON object containing structured metadata.
 
 As an expert {persona_title}:
-1. Evaluate if the article's disease focus matches the patient's disease. Set disease_match to true if the article's cancer type is relevant to the patient's condition.
+1. Evaluate if the article's disease/condition focus matches the patient's condition ({disease or 'the evaluated pathology'}). Set disease_match to true if the article is relevant to the patient's condition.
 2. Analyze treatment outcomes. Set treatment_shown to true if the article demonstrates positive treatment results.
-3. For each actionable event you find in the article, determine if it matches any of the patient's actionable events. For genetic mutations, create two separate events:
-   - When you find a general mutation mention (e.g., if the article mentions just "NRAS" when patient has "NRAS (p.Gln61Lys)"), create an event with the general form and set matches_query=true
-   - When you find an exact mutation match (e.g., if the article mentions "NRAS (p.Gln61Lys)" like it appears in the patient's events), create another event with the exact mutation and set matches_query=true
+3. For each actionable event you find in the article, determine if it matches any of the patient's actionable events:
+   - When you find a general match (e.g., mentioning the general drug class, resistance, or radiographic sign), create an event with the general form and set matches_query=true
+   - When you find an exact match (e.g., specific mutation, specific regimen, or specific imaging phenotype matching the patient's events), create an event with the exact match and set matches_query=true
 
-Here's the specific information to extract for each article and their points:
+Here's the specific information to extract for each article:
 
 {numbered_list}
 
@@ -118,10 +104,10 @@ Please analyze the article and provide a JSON response with the following struct
   "article_metadata": {{
     "title": "...",
     "journal_title": "...",
-    "journal_sjr": 0,
     "year": "...",
     "{domain_field['key']}": true/false,
     {schema_field_lines},
+    "condition": "...",
     "type_of_cancer": "...",
     "paper_type": "...",
     "actionable_events": [
@@ -130,8 +116,8 @@ Please analyze the article and provide a JSON response with the following struct
         "matches_query": true/false
       }}
     ],
-    "drug_results": ["...", "..."],
-    "overall_points": 0
+    "drugs_tested": true/false,
+    "drug_results": ["...", "..."]
   }}
 }}
 

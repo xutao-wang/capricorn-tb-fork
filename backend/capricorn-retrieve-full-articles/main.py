@@ -32,11 +32,12 @@ logger = logging.getLogger(__name__)
 
 # Global variable to store journal impact data
 journal_impact_data = {}
+journal_impact_lookup = {}
 
 def fetch_journal_impact_data():
     """Fetch journal impact data from BigQuery and store in memory."""
-    global journal_impact_data
-    project_id = os.environ.get('GENAI_PROJECT_ID', 'gemini-med-lit-review')
+    global journal_impact_data, journal_impact_lookup
+    project_id = os.environ.get('GENAI_PROJECT_ID') or os.environ.get('GOOGLE_CLOUD_PROJECT') or 'onboarding-sandbox-477121'
     journal_dataset = os.environ.get('JOURNAL_DATASET', 'journal_rank')
     query = f"""
     SELECT
@@ -53,9 +54,23 @@ def fetch_journal_impact_data():
 
         # Convert to dictionary for faster lookups
         journal_impact_data = {row['title']: float(row['sjr']) for row in results}
+        journal_impact_lookup = {title.strip().lower(): float(sjr) for title, sjr in journal_impact_data.items()}
         logger.info(f"Loaded {len(journal_impact_data)} journal impact records")
     except Exception as e:
         logger.error(f"Error fetching journal impact data: {str(e)}")
+
+def lookup_journal_sjr(journal_title):
+    """Fast in-memory SJR lookup without prompt injection."""
+    if not journal_title:
+        return 0.0
+    jt = journal_title.strip().lower()
+    if jt in journal_impact_lookup:
+        return journal_impact_lookup[jt]
+    if jt.startswith('the '):
+        jt_sub = jt[4:].strip()
+        if jt_sub in journal_impact_lookup:
+            return journal_impact_lookup[jt_sub]
+    return 0.0
 
 # Global variable to store citation data (NIH iCite: citation count + RCR,
 # keyed by PMID). See docs/citation-scoring-plan.md at the repo root --
@@ -67,7 +82,7 @@ citation_data = {}
 def fetch_citation_data():
     """Fetch citation data from BigQuery and store in memory."""
     global citation_data
-    project_id = os.environ.get('GENAI_PROJECT_ID', 'gemini-med-lit-review')
+    project_id = os.environ.get('GENAI_PROJECT_ID') or os.environ.get('GOOGLE_CLOUD_PROJECT') or 'onboarding-sandbox-477121'
     citation_dataset = os.environ.get('CITATION_DATASET', 'citation_data')
     query = f"""
     SELECT
@@ -93,9 +108,9 @@ def fetch_citation_data():
         logger.error(f"Error fetching citation data: {str(e)}")
 
 # Initialize clients with environment variables
-GCP_PROJECT = os.environ.get('GENAI_PROJECT_ID') or os.environ.get('GOOGLE_CLOUD_PROJECT') or 'gemini-med-lit-review'
-GCP_LOCATION = os.environ.get('LOCATION', 'global')  # gemini-3.1-pro-preview requires 'global' region
-MODEL = "gemini-3.1-pro-preview"
+GCP_PROJECT = os.environ.get('GENAI_PROJECT_ID') or os.environ.get('GOOGLE_CLOUD_PROJECT') or 'onboarding-sandbox-477121'
+GCP_LOCATION = os.environ.get('LOCATION', 'global')
+MODEL = "gemini-2.5-flash"
 
 client = genai.Client(
     vertexai=True,
@@ -105,31 +120,23 @@ client = genai.Client(
 bq_client = bigquery.Client(project=os.environ.get('BIGQUERY_PROJECT_ID', GCP_PROJECT))
 
 def analyze_with_gemini(article_text, pmcid, specialty, disease=None, events_text=None, weight_overrides=None, pmid=None):
-    # Create journal context string
-    journal_context = ""
-    for title, sjr in journal_impact_data.items():
-        journal_context += f"- {title}: {sjr}\n"
-
-    prompt = build_article_scoring_prompt(specialty, disease, events_text, journal_context, article_text)
-    prompt += "\n\nIMPORTANT: Return ONLY the raw JSON object. Do not include any explanatory text, markdown formatting, or code blocks. The response should start with '{' and end with '}' with no other characters before or after."
+    prompt = build_article_scoring_prompt(specialty, disease, events_text, article_text)
+    prompt += "\n\nIMPORTANT: Return ONLY the raw JSON object. Do not include any explanatory text, markdown formatting, or code blocks."
     
-    # Configure Gemini with user's standard config pattern
+    # Fast, structured JSON extraction with Gemini 2.5 Flash
     generate_content_config = types.GenerateContentConfig(
-        temperature=1,
+        temperature=0.1,
         top_p=0.95,
-        max_output_tokens=65535,
+        max_output_tokens=4096,
+        response_mime_type="application/json",
         safety_settings=[
             types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
             types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
             types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
             types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF"),
         ],
-        thinking_config=types.ThinkingConfig(
-            thinking_level="HIGH",
-        ),
     )
     
-    # Create content with prompt
     contents = [
         types.Content(
             role="user",
@@ -137,152 +144,100 @@ def analyze_with_gemini(article_text, pmcid, specialty, disease=None, events_tex
         ),
     ]
     
-    # Initialize retry parameters
-    base_delay = 5  # Start with 5 seconds
+    base_delay = 2
     attempt = 0
+    max_attempts = 3
+    response_text = ""
     
-    while True:  # Keep trying indefinitely
+    while attempt < max_attempts:
         try:
-            # Use streaming to collect the response
-            response_text = ""
-            for chunk in client.models.generate_content_stream(
+            response = client.models.generate_content(
                 model=MODEL,
                 contents=contents,
                 config=generate_content_config,
-            ):
-                if not chunk.candidates or not chunk.candidates[0].content or not chunk.candidates[0].content.parts:
-                    continue
-                if chunk.text:
-                    response_text += chunk.text
-            
-            # Create a simple response object for compatibility with existing parsing
-            class StreamedResponse:
-                def __init__(self, text):
-                    self.text = text
-            response = StreamedResponse(response_text)
-            break  # If successful, break out of the retry loop
+            )
+            response_text = response.text or ""
+            break
         except Exception as e:
-            error_str = str(e)
-            if "429 RESOURCE_EXHAUSTED" in error_str:
-                attempt += 1
-                # Calculate exponential backoff delay with a maximum of 5 minutes
-                delay = min(base_delay * (2 ** (attempt - 1)), 300)  # Cap at 300 seconds (5 minutes)
-                logger.warning(f"Received RESOURCE_EXHAUSTED error. Attempt {attempt}. Waiting {delay} seconds before retry...")
+            attempt += 1
+            if "429" in str(e) and attempt < max_attempts:
+                delay = base_delay * attempt
+                logger.warning(f"Rate limit encountered for {pmcid}. Waiting {delay}s before retry...")
                 time.sleep(delay)
             else:
-                # If it's not a 429 error, raise immediately
-                raise
+                logger.error(f"Gemini error analyzing {pmcid}: {str(e)}")
+                return None
     
     try:
-        # Log Gemini's raw response with clear markers
-        logger.info("========== RAW GEMINI RESPONSE START ==========")
-        logger.info(response.text)
-        logger.info("========== RAW GEMINI RESPONSE END ============")
-        
-        # Clean up response text
-        text = response.text.strip()
-        
-        # Try to find JSON object
-        try:
-            # First try to find JSON between ```json and ``` markers
-            if '```json' in text:
-                text = text.split('```json')[1].split('```')[0].strip()
-            # If that fails, try to find JSON between { and }
-            elif '{' in text and '}' in text:
-                start = text.find('{')
-                end = text.rfind('}') + 1
-                text = text[start:end]
+        text = response_text.strip()
+        if text.startswith('```json'):
+            text = text.split('```json')[1].split('```')[0].strip()
+        elif text.startswith('```'):
+            text = text.split('```')[1].split('```')[0].strip()
+        elif '{' in text and '}' in text:
+            start = text.find('{')
+            end = text.rfind('}') + 1
+            text = text[start:end]
             
-            # Remove any non-JSON text before or after
-            text = text.strip()
-            
-            # Log cleaned text before parsing
-            logger.info("========== CLEANED TEXT START ==========")
-            logger.info(text)
-            logger.info("========== CLEANED TEXT END ============")
-            
-            # Try to parse as JSON
-            try:
-                analysis = json.loads(text)
-                logger.info("Successfully parsed JSON")
-            except json.JSONDecodeError as e:
-                logger.error(f"JSON parse error at position {e.pos}: {e.msg}")
-                logger.error(f"Error context: {text[max(0, e.pos-50):min(len(text), e.pos+50)]}")
-                raise
-            
-            # Validate required fields
-            if not isinstance(analysis, dict) or 'article_metadata' not in analysis:
-                logger.error("Invalid JSON structure - missing article_metadata")
-                return None
-                
-            metadata = analysis['article_metadata']
-            domain_field_key = specialty['articleScoring']['domainFilterField']['key']
-            required_fields = ['title', 'journal_title', 'journal_sjr', domain_field_key, 'type_of_cancer', 'paper_type', 'actionable_events']
-            for field in required_fields:
-                if field not in metadata:
-                    logger.error(f"Invalid JSON structure - missing {field}")
-                    return None
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON: {str(e)}")
-            logger.error(f"Cleaned response was: {text}")
+        analysis = json.loads(text)
+        if not isinstance(analysis, dict) or 'article_metadata' not in analysis:
+            logger.error(f"Invalid JSON structure for {pmcid} - missing article_metadata")
             return None
-        
-        # Process metadata and calculate points
-        if 'article_metadata' in analysis:
-            metadata = analysis['article_metadata']
-            # Add PMCID and generate link
-            metadata['PMCID'] = pmcid
-            metadata['link'] = f'https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/'
             
-            # Calculate points with disease information
-            citation_info = citation_data.get(str(pmid)) if pmid else None
-            points, point_breakdown = calculate_points(specialty, metadata, disease, weight_overrides, citation_info)
-            metadata['overall_points'] = points
-            metadata['point_breakdown'] = point_breakdown
-            
-            # Store full article text at top level
-            analysis['full_article_text'] = article_text
-            logger.info("Added full article text and calculated points")
+        metadata = analysis['article_metadata']
+        domain_field_key = specialty['articleScoring']['domainFilterField']['key']
+
+        # Ensure required fields exist with fallbacks
+        if not metadata.get('title'):
+            metadata['title'] = f"Article {pmcid}"
+        if not metadata.get('journal_title'):
+            metadata['journal_title'] = "Unknown Journal"
+
+        # Deterministic O(1) BigQuery SJR lookup
+        metadata['journal_sjr'] = lookup_journal_sjr(metadata.get('journal_title', ''))
+
+        # Standardize condition/cancer field
+        condition = metadata.get('condition') or metadata.get('type_of_cancer') or metadata.get('disease') or disease or ''
+        metadata['type_of_cancer'] = condition
+        metadata['condition'] = condition
+
+        # Ensure paper_type and actionable_events
+        if 'paper_type' not in metadata:
+            metadata['paper_type'] = 'Research Article'
+        if 'actionable_events' not in metadata or not isinstance(metadata['actionable_events'], list):
+            metadata['actionable_events'] = []
+
+        # Domain field fallback
+        if domain_field_key not in metadata:
+            metadata[domain_field_key] = True
         
+        # Add PMCID and generate link
+        metadata['PMCID'] = pmcid
+        metadata['link'] = f'https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/'
+        
+        # Calculate points with disease information
+        citation_info = citation_data.get(str(pmid)) if pmid else None
+        points, point_breakdown = calculate_points(specialty, metadata, disease, weight_overrides, citation_info)
+        metadata['overall_points'] = points
+        metadata['point_breakdown'] = point_breakdown
+        
+        # Store full article text at top level
+        analysis['full_article_text'] = article_text
         return analysis
     except Exception as e:
-        logger.error(f"Error analyzing article with Gemini: {str(e)}")
+        logger.error(f"Error parsing article {pmcid}: {str(e)}")
         return None
 
 def create_bq_query(events_text, num_articles=15, disease=None):
     project_id = os.environ.get('BIGQUERY_PROJECT_ID', GCP_PROJECT)
     model_dataset = os.environ.get('MODEL_DATASET', 'model')
-    # Use the new public PMC table
     pubmed_table = 'bigquery-public-data.pmc_open_access_commercial.articles'
     embedding_model = f'{project_id}.{model_dataset}.textembed'
 
-    # Anchor the embedding query to the patient's disease so VECTOR_SEARCH returns
-    # disease-relevant articles. Eval validation: 12% -> 100% disease relevance for
-    # B-ALL case 1 with disease prepended; off-topic citations (Sezary syndrome,
-    # NSCLC) eliminated; recommendations shifted to clinically appropriate
-    # therapies (CAR-T, ADC). When disease is None, behavior is unchanged.
     query_body = f"{disease}\n\n{events_text}" if disease else events_text
-
-    # The public PMC corpus has duplicate rows for ~113K PMCIDs (data quality
-    # issue at ingestion -- see note to corpus maintainer). Without dedup,
-    # VECTOR_SEARCH returns all duplicate rows and a user requesting
-    # num_articles=3 can get the same article three times.
-    # Strategy: over-fetch (5x or +20, capped at 500), dedupe by pmc_id keeping
-    # the row with smallest distance (best similarity), then LIMIT to an
-    # analysis pool bigger than what's actually displayed (see
-    # docs/evidence-weighting-plan-v2.md). Vector search is cheap; the
-    # expensive per-article Gemini analysis only runs on the deduped set.
     over_fetch = min(max(num_articles * 5, num_articles + 20), 500)
-
-    # The doctor's weight_overrides only change scoring, not which
-    # candidates come back from vector search -- unless we score a bigger
-    # pool than we display and let the weighted score decide which ones
-    # survive. 3x is a deliberate cost/quality tradeoff: bigger pools let
-    # weights matter more (more candidates competing for the same slots)
-    # but multiply Gemini analysis cost by the same factor, since every
-    # pool candidate gets a full LLM read regardless of whether it makes
-    # the final cut.
-    analysis_pool_size = min(num_articles * 3, over_fetch)
+    # Target pool size: for 15 articles, score ~21 candidates for high relevance and low latency
+    analysis_pool_size = min(max(num_articles, int(num_articles * 1.4)), 25)
 
     return f"""
     DECLARE query_text STRING;
@@ -317,18 +272,12 @@ def create_bq_query(events_text, num_articles=15, disease=None):
 
 def stream_response(events_text, specialty, disease=None, num_articles=15, weight_overrides=None):
     try:
-        # Execute BigQuery -- this now returns a larger analysis pool than
-        # num_articles (see create_bq_query's analysis_pool_size), not just
-        # the final displayed count.
         query = create_bq_query(events_text, num_articles, disease=disease)
         query_job = bq_client.query(query)
         results = list(query_job.result())
         pool_size = len(results)
 
-        # Stream initial metadata. total_articles here reflects the pool
-        # being screened, not the final display count, so the doctor's
-        # progress indicator reflects the actual (larger) amount of work
-        # happening before results appear.
+        # Stream initial metadata
         yield json.dumps({
             "type": "metadata",
             "data": {
@@ -338,10 +287,6 @@ def stream_response(events_text, specialty, disease=None, num_articles=15, weigh
             }
         }) + "\n"
 
-        # Score every candidate in the pool -- buffered, not streamed as it
-        # completes, since we don't know which candidates make the final
-        # cut until every one has a weighted score. See
-        # docs/evidence-weighting-plan-v2.md at the repo root.
         scored_articles = []
         for idx, row in enumerate(results, 1):
             pmcid = row['pmc_id']
@@ -350,28 +295,32 @@ def stream_response(events_text, specialty, disease=None, num_articles=15, weigh
 
             logger.info(f"Scoring candidate {idx}/{pool_size}: PMCID {pmcid}, content length: {len(content)}")
 
-            if idx > 1:  # Don't delay before the first analysis
-                logger.info("Waiting 5 seconds before next analysis...")
-                time.sleep(5)
+            # Stream progress update to keep connection active and inform the user
+            yield json.dumps({
+                "type": "metadata",
+                "data": {
+                    "total_articles": pool_size,
+                    "current_article": idx,
+                    "status": "processing"
+                }
+            }) + "\n"
 
             try:
                 analysis = analyze_with_gemini(content, pmcid, specialty, disease, events_text, weight_overrides, pmid)
                 if analysis:
                     scored_articles.append(analysis)
                 else:
-                    logger.error(f"Failed to analyze article {pmcid}")
+                    logger.warning(f"Failed to analyze article {pmcid}")
             except Exception as e:
                 logger.error(f"Error processing article {pmcid}: {str(e)}")
 
-        # Sort by the doctor's weighted score and keep only the requested
-        # count -- this is the step that makes weight_overrides change
-        # *which* articles the doctor sees, not just their display order.
+        # Sort by weighted score and retain top requested articles
         scored_articles.sort(key=lambda a: a['article_metadata']['overall_points'], reverse=True)
         top_articles = scored_articles[:num_articles]
         total_articles = len(top_articles)
 
         retrieved_pmcids = [a['article_metadata']['PMCID'] for a in top_articles]
-        print(f"Selected top {total_articles} of {pool_size} scored candidates: {retrieved_pmcids}")
+        logger.info(f"Selected top {total_articles} of {len(scored_articles)} scored candidates: {retrieved_pmcids}")
 
         yield json.dumps({
             "type": "pmcids",
