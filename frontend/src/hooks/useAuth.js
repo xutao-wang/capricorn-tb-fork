@@ -22,6 +22,7 @@ export const useAuth = (setShowUserMenu) => {
   const [firstName, setFirstName] = useState('');
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authError, setAuthError] = useState(null);
   const auth = getAuth();
 
   const handleLogin = useCallback(async () => {
@@ -38,10 +39,23 @@ export const useAuth = (setShowUserMenu) => {
       const firstName = displayName.split(' ')[0];
       setFirstName(firstName);
       setIsAuthenticated(true);
+      setAuthError(null);
       console.log('[AUTH_DEBUG] Authentication state updated:', { firstName, isAuthenticated: true });
     } catch (error) {
       console.error('[AUTH_DEBUG] Error signing in with Google:', error);
       setIsAuthenticated(false);
+      if (error.code === 'auth/operation-not-allowed') {
+        const msg = 'Google Sign-in is not yet enabled in the Firebase Console.\n\nPlease enable it under:\nFirebase Console -> Authentication -> Sign-in method -> Google.';
+        setAuthError(msg);
+        alert(msg);
+      } else if (error.code === 'auth/popup-blocked') {
+        const msg = 'The sign-in popup was blocked by your browser. Please allow popups for this site.';
+        setAuthError(msg);
+        alert(msg);
+      } else if (error.code !== 'auth/popup-closed-by-user') {
+        setAuthError(error.message);
+        alert(`Authentication error: ${error.message}`);
+      }
     }
   }, [auth]);
 
@@ -64,13 +78,18 @@ export const useAuth = (setShowUserMenu) => {
         uid: firebaseUser?.uid
       });
 
-      if (firebaseUser) {
-        console.log('[AUTH_MENU_DEBUG] useAuth: Using existing user');
+      if (firebaseUser && !firebaseUser.isAnonymous) {
+        console.log('[AUTH_MENU_DEBUG] useAuth: Authenticated user detected:', firebaseUser.uid);
         setUser(firebaseUser);
         const displayName = firebaseUser.displayName || '';
-        const firstName = displayName.split(' ')[0];
+        const firstName = displayName.split(' ')[0] || 'Doctor';
         setFirstName(firstName);
         setIsAuthenticated(true);
+      } else if (firebaseUser && firebaseUser.isAnonymous) {
+        console.log('[AUTH_MENU_DEBUG] useAuth: Existing user is anonymous guest');
+        setUser(firebaseUser);
+        setFirstName('');
+        setIsAuthenticated(false);
       } else {
         console.log('[AUTH_MENU_DEBUG] useAuth: No user, signing in anonymously');
         try {
