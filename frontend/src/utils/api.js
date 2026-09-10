@@ -17,7 +17,7 @@
 export const retrieveAndAnalyzeArticles = async (disease, events, specialtyId, onProgress, numArticles = 15, weightOverrides) => {
   try {
     // Step 1: Get PMIDs and analysis from first cloud function
-    const response = await fetch(`https://retrieve-full-articles-live-pmc-text-embedding-00-podljswina-uc.a.run.app`, {
+    const response = await fetch(`https://retrieve-full-articles-live-pmc-text-embedding-00-djejr2bj2q-uc.a.run.app`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -79,7 +79,7 @@ const API_BASE_URL = 'https://sfslkz5uiq-uc.a.run.app';
 
 export const streamChat = async (message, userId, chatId, onChunk, specialtyId) => {
   try {
-    const response = await fetch(`https://chat-podljswina-uc.a.run.app`, {
+    const response = await fetch(`https://chat-djejr2bj2q-uc.a.run.app`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -137,7 +137,7 @@ const GENERATE_CASE_URL = process.env.REACT_APP_GENERATE_CASE_URL;
  */
 export const redactSensitiveInfo = async (text) => {
   try {
-    const response = await fetch(`https://redact-sensitive-info-podljswina-uc.a.run.app`, {
+    const response = await fetch(`https://redact-sensitive-info-djejr2bj2q-uc.a.run.app`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -163,7 +163,7 @@ export const redactSensitiveInfo = async (text) => {
 // at the repo root.
 export const detectSpecialty = async (text) => {
   try {
-    const response = await fetch(`https://detect-specialty-podljswina-uc.a.run.app`, {
+    const response = await fetch(`https://detect-specialty-djejr2bj2q-uc.a.run.app`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -184,7 +184,7 @@ export const detectSpecialty = async (text) => {
 
 export const extractDisease = async (text, specialtyId) => {
   try {
-    const response = await fetch(`https://extract-disease-podljswina-uc.a.run.app`, {
+    const response = await fetch(`https://extract-disease-djejr2bj2q-uc.a.run.app`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -206,7 +206,7 @@ export const extractDisease = async (text, specialtyId) => {
 
 export const extractEvents = async (text, specialtyId) => {
   try {
-    const response = await fetch(`https://extract-events-podljswina-uc.a.run.app`, {
+    const response = await fetch(`https://extract-events-djejr2bj2q-uc.a.run.app`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -344,7 +344,7 @@ export const generateFinalAnalysis = async (caseNotes, disease, events, analyzed
       analyzed_articles: analyzedArticles
     });
 
-    const response = await fetch(`https://capricorn-final-analysis-podljswina-uc.a.run.app`, {
+    const response = await fetch(`https://capricorn-final-analysis-djejr2bj2q-uc.a.run.app`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -380,7 +380,7 @@ export const generateFinalAnalysis = async (caseNotes, disease, events, analyzed
  */
 export const sendFeedback = async (feedbackData) => {
   try {
-    const response = await fetch('https://send-feedback-email-podljswina-uc.a.run.app', {
+    const response = await fetch('https://send-feedback-email-djejr2bj2q-uc.a.run.app', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -407,7 +407,7 @@ export const sendFeedback = async (feedbackData) => {
  */
 export const processLabPDF = async (pdfBase64) => {
   try {
-    const response = await fetch('https://process-lab-podljswina-uc.a.run.app', {
+    const response = await fetch('https://process-lab-djejr2bj2q-uc.a.run.app', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

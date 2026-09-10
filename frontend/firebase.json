@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "site": "capricorn-test-719d0",
+    "site": "onboarding-sandbox-477121",
     "public": "build",
     "ignore": [
       "firebase.json",
