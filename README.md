@@ -1,24 +1,107 @@
-# Capricorn Medical Research Application
+# Capricorn — Multimodal Medical Research Assistant
 
-A medical research application that uses AI to analyze pediatric oncology cases and provide treatment recommendations by searching through PubMed articles using vector embeddings and Gemini.
+An AI-powered clinical decision support and medical research platform built on Google Cloud and Vertex AI. Capricorn analyzes complex clinical presentations, extracts actionable biomarkers, searches through 2.4+ million PubMed Central open access full-text articles using BigQuery vector embeddings (`text-embedding-005`), and synthesizes evidence-based regimens with **Gemini**.
+
+Originally designed for pediatric oncology, Capricorn now features a **Multimodal Medical Imaging Pipeline** developed for the **Rutgers Health Tuberculosis & Infectious Disease Prototype**, enabling direct ingestion and analysis of **DICOM (.dcm)** files and high-resolution thoracic radiographs/CT scans alongside clinical microbiology and molecular genomics.
+
+---
+
+## Key Capabilities
+
+- 🫁 **Multimodal Thoracic Imaging (TB Focus)**: Native parsing of 12/16-bit DICOM radiographs and CT scans (`pydicom`), dynamic window center/width contrast normalization, and expert thoracic phenotyping via **Vertex AI Gemini 2.5 Flash Multimodal Vision** (cavitary lung pathology, consolidations, tree-in-bud opacities, and miliary patterns).
+- 🧬 **Multi-Specialty Persona Architecture**: Firestore-backed specialty personas (`tuberculosis`, `pediatric-oncology`, `adult-oncology`, `cardiology`, `neurology`, `gastroenterology`, `general-medicine`) with automated specialty classification and evidence-weighting rubrics.
+- ⚡ **High-Performance Literature Retrieval**: Disease-anchored BigQuery `VECTOR_SEARCH` against 2.4 million PubMed Central full-text articles with real-time SSE progress streaming and $O(1)$ in-memory SCImago Journal Rank (SJR) impact scoring.
+- 🩺 **Clinical Trials & Evidence Synthesis**: Automatic screening of active ClinicalTrials.gov studies and Gemini synthesis of individualized therapy recommendations.
+
+---
 
 ## Architecture Overview
 
-![Architecture Diagram](visuals/capricorn_architecture.png)
+```mermaid
+flowchart TD
+    subgraph Ingestion ["1. Multimodal Ingestion Layer"]
+        A["DICOM (.dcm) Files<br/>(12/16-bit CXR / CT)"]
+        B["High-Res Photos<br/>(PNG / JPEG / WebP)"]
+        A --> C["pydicom Parser & Rescaling<br/>(Window Center/Width, MONOCHROME)"]
+        B --> D["PIL Image Normalizer"]
+        C --> E["8-bit Grayscale JPEG & Metadata"]
+        D --> E
+    end
+
+    subgraph Perception ["2. Vertex AI Gemini Multimodal Vision"]
+        E --> F["Gemini 2.5 Flash Vision Agent<br/>(`analyze-medical-image`)"]
+        F --> G["Structured Phenotype Extraction<br/>• Cavitations (Lobe/Segment, Wall)<br/>• Consolidations & Air Bronchograms<br/>• Tree-in-Bud Bronchogenic Spread<br/>• Miliary Dissemination Patterns<br/>• Drug Resistance Risk Assessment"]
+    end
+
+    subgraph Core ["3. Capricorn RAG & Agent Engine"]
+        G --> H["Automated Case Note Population<br/>& Actionable Events Feed"]
+        H --> I["Specialty Classifier<br/>(Tuberculosis & Infectious Disease)"]
+        I --> J["BigQuery Vector Search<br/>(PMC 2.4M Articles, `text-embedding-005`)"]
+        J --> K["SCImago Journal Rank & Scoring<br/>(Cavitary & Drug-Resistance Weights)"]
+        K --> L["Gemini Synthesis & Chat<br/>(Evidence-Based Treatment & Trials)"]
+    end
+
+    subgraph UI ["4. Clinician & Researcher Interface"]
+        G --> M["Interactive Radiology Findings Card<br/>• High-Res Lightbox Preview<br/>• Cavitary TB Phenotype Alert<br/>• Severity & Distribution Badges"]
+        L --> M
+    end
+```
 
 The application consists of:
-- **Frontend**: React application hosted on Firebase
-- **Backend**: Cloud Functions for data processing pipeline
-- **Database**: Firestore for chat storage, BigQuery for article embeddings
-- **AI Services**: Gemini for analysis, DLP for PII redaction
+- **Frontend**: React application running on Node 18 and Express, deployed on **Google Cloud Run**
+- **Backend Microservices**: 10 Gen2 Cloud Functions and Cloud Run services in `us-central1`
+- **Database**: Firestore (`capricorn-prod`) for chat sessions and specialty personas, BigQuery for PMC vector embeddings and SCImago journal rankings
+- **AI Services**: Vertex AI Gemini 2.5 Flash (Vision & fast scoring), Gemini 3.1 Flash Lite (specialty detection), Gemini 3.1 Pro (final synthesis), and Google Cloud DLP (demographic redaction)
+
+---
+
+## Tuberculosis & Multimodal Imaging Pipeline (Rutgers Health)
+
+In Phase 1 of the Rutgers Health Infectious Disease & Data Science collaboration, research data focuses heavily on medical imaging from the NIH/NIAID TB Portals. Capricorn integrates this imaging data directly into the diagnostic loop:
+
+1. **DICOM Ingestion**: Supports `.dcm` files with varying bit depths (12-bit/16-bit stored), extracting DICOM header metadata (modality, view position, body part, study date) and applying window center/width linear rescale transforms.
+2. **Thoracic Feature Extraction**: Gemini 2.5 Flash evaluates:
+   - **Cavitation**: Identifies apical cavities, wall thickness, and fluid levels (critical biomarkers for bacillary load and delayed sputum conversion).
+   - **Parenchymal Disease**: Quantifies airspace consolidation, air bronchograms, and ground-glass opacities.
+   - **Bronchogenic & Hematogenous Spread**: Detects branching tree-in-bud opacities and diffuse 1–3 mm miliary micronodules.
+   - **Laterality & Severity**: Generates quantitative zone involvement and overall severity grade.
+3. **Automated Evidence Weighting**: Radiologic phenotypes (e.g. *"Right upper lobe cavitation"*, *"Tree-in-bud opacities"*) are extracted as actionable events, driving BigQuery literature ranking to prioritize studies with identical imaging phenotypes and matching resistance profiles (e.g., *rpoB* S531L rifampicin resistance, BPaL/BPaLM trials).
+4. **Interactive UI**: Clinicians can upload chest images via the `Upload CXR / DICOM` modal, preview the radiograph in an interactive lightbox, and immediately see detected phenotypes populated into the diagnostic workspace.
+5. **Sample Datasets**: Built-in test files are provided in `frontend/public/`:
+   - `sample_tb_cxr.jpg`: High-resolution PA chest radiograph demonstrating bilateral cavitary tuberculosis.
+   - `sample_tb_cxr.dcm`: Valid DICOM radiograph for testing native DICOM ingestion.
+
+---
 
 ## Prerequisites
 
-- Google Cloud Platform account with billing enabled
-- Node.js 18 or higher
-- Firebase CLI installed (`npm install -g firebase-tools`)
-- gcloud CLI installed and configured
-- SendGrid account for email notifications
+- Google Cloud Platform account with billing enabled (`onboarding-sandbox-477121`)
+- gcloud CLI installed and authenticated
+- Node.js 18 or higher (for local frontend development)
+- Docker / Cloud Build (for container deployments)
+- SendGrid account (optional, for email feedback notifications)
+
+---
+
+## One-Command Deployment
+
+To deploy the entire multimodal architecture to Google Cloud:
+
+```bash
+# 1. Authenticate with gcloud
+gcloud auth login terellmoore@terellmoore.altostrat.com
+
+# 2. Run the automated deployment script
+./deploy-tb-multimodal.sh
+```
+
+This script automatically:
+1. Seeds all clinical specialty personas (including Tuberculosis) into Firestore (`capricorn-prod`).
+2. Deploys the `analyze-medical-image` Gen2 Cloud Function with `pydicom` and Gemini 2.5 Flash.
+3. Builds the frontend container with Cloud Build (`gcr.io/onboarding-sandbox-477121/medical-assistant:latest`).
+4. Deploys the web application to Cloud Run with public invoker access.
+
+---
 
 ## Setup Instructions
 
@@ -432,9 +515,21 @@ gcloud functions deploy extract-events \
 After deploying all functions, collect their URLs and update the frontend API configuration.
 
 **IMPORTANT:** Each Cloud Function is deployed as its own Cloud Run service with a unique URL.
-The frontend `api.js` has hardcoded URLs for ALL 8 backend functions — every one of them must be
-updated to point to YOUR project's function URLs. Skipping any will cause 400 errors because
-requests will go to the wrong service.
+The frontend `api.js` has endpoints for all 10 backend microservices — every one of them must be
+configured to point to your project's function URLs.
+
+| Service Name | Source Directory | Runtime / Model | Purpose |
+|---|---|---|---|
+| `analyze-medical-image` | `backend/capricorn-analyze-image` | Python 3.12 / Gemini 2.5 Flash | **NEW:** DICOM parsing (`pydicom`) & thoracic TB phenotyping |
+| `detect-specialty` | `backend/capricorn-detect-specialty` | Python 3.12 / Gemini 3.1 Flash Lite | Automated clinical specialty classification |
+| `extract-disease` | `backend/pubmed-search-tester-extract-disease` | Python 3.12 / Gemini 3.1 Flash Lite | Primary disease / condition extraction |
+| `extract-events` | `backend/pubmed-search-tester-extract-events` | Python 3.12 / Gemini 3.1 Flash Lite | Actionable clinical, radiographic, and genomic event extraction |
+| `retrieve-full-articles-live-pmc-text-embedding-005` | `backend/capricorn-retrieve-full-articles` | Python 3.12 / Gemini 2.5 Flash | PMC vector search, in-memory SJR scoring, and real-time SSE progress streaming |
+| `capricorn-final-analysis` | `backend/capricorn-final-analysis` | Python 3.12 / Gemini 3.1 Pro | Evidence synthesis & ClinicalTrials.gov study matching |
+| `chat` | `backend/capricorn-chat` | Python 3.12 / Gemini 3.1 Pro | Interactive conversational follow-up with Firestore history |
+| `redact-sensitive-info` | `backend/capricorn-redact-sensitive-info` | Python 3.12 / Cloud DLP | De-identification and PII redaction |
+| `process-lab` | `backend/capricorn-process-lab` | Python 3.12 / Gemini 3.1 Flash Lite | Genomic & clinical laboratory report PDF parsing |
+| `send-feedback-email` | `backend/capricorn-feedback` | Python 3.12 / SendGrid | Clinician feedback webhook |
 
 ```bash
 # Navigate back to project root
@@ -453,8 +548,10 @@ CHAT_URL=$(gcloud functions describe chat --region=$REGION --format='value(servi
 FEEDBACK_URL=$(gcloud functions describe send-feedback-email --region=$REGION --format='value(serviceConfig.uri)')
 EXTRACT_DISEASE_URL=$(gcloud functions describe extract-disease --region=$REGION --format='value(serviceConfig.uri)')
 EXTRACT_EVENTS_URL=$(gcloud functions describe extract-events --region=$REGION --format='value(serviceConfig.uri)')
+DETECT_SPECIALTY_URL=$(gcloud functions describe detect-specialty --region=$REGION --format='value(serviceConfig.uri)')
+ANALYZE_IMAGE_URL=$(gcloud functions describe analyze-medical-image --region=$REGION --format='value(serviceConfig.uri)')
 
-# Verify all URLs were collected (all should be non-empty)
+# Verify all URLs were collected
 echo ""
 echo "=== Collected URLs ==="
 echo "REDACT_URL=$REDACT_URL"
@@ -465,65 +562,30 @@ echo "CHAT_URL=$CHAT_URL"
 echo "FEEDBACK_URL=$FEEDBACK_URL"
 echo "EXTRACT_DISEASE_URL=$EXTRACT_DISEASE_URL"
 echo "EXTRACT_EVENTS_URL=$EXTRACT_EVENTS_URL"
+echo "DETECT_SPECIALTY_URL=$DETECT_SPECIALTY_URL"
+echo "ANALYZE_IMAGE_URL=$ANALYZE_IMAGE_URL"
 echo "======================"
 echo ""
 
-# Check that none are empty before proceeding
-for var in REDACT_URL PROCESS_LAB_URL RETRIEVE_ARTICLES_URL FINAL_ANALYSIS_URL CHAT_URL FEEDBACK_URL EXTRACT_DISEASE_URL EXTRACT_EVENTS_URL; do
-  if [ -z "${!var}" ]; then
-    echo "ERROR: $var is empty. Check that the function was deployed with the correct name."
-    echo "Run 'gcloud functions list --region=$REGION' to see deployed function names."
-  fi
-done
-
-# Save URLs to file for reference
-{
-  echo "# Cloud Function URLs - Generated $(date)"
-  echo "REDACT_URL=$REDACT_URL"
-  echo "PROCESS_LAB_URL=$PROCESS_LAB_URL"
-  echo "RETRIEVE_ARTICLES_URL=$RETRIEVE_ARTICLES_URL"
-  echo "FINAL_ANALYSIS_URL=$FINAL_ANALYSIS_URL"
-  echo "CHAT_URL=$CHAT_URL"
-  echo "FEEDBACK_URL=$FEEDBACK_URL"
-  echo "EXTRACT_DISEASE_URL=$EXTRACT_DISEASE_URL"
-  echo "EXTRACT_EVENTS_URL=$EXTRACT_EVENTS_URL"
-} > function-urls.txt
-
-# Update ALL hardcoded URLs in api.js
-# Each function has its own Cloud Run service URL — every one must be updated
-
-# 1. Retrieve Full Articles
+# Update ALL hardcoded URLs in frontend/src/utils/api.js
 sed -i.bak "s|https://retrieve-full-articles[^\`'\"]*|$RETRIEVE_ARTICLES_URL|g" frontend/src/utils/api.js
-
-# 2. Chat
 sed -i.bak "s|https://chat-[^\`'\"]*\.a\.run\.app|$CHAT_URL|g" frontend/src/utils/api.js
-
-# 3. Redact Sensitive Info (matches both cloudfunctions.net and a.run.app URL formats)
 sed -i.bak "s|https://[^\`'\"]*redact-sensitive-info[^\`'\"]*|$REDACT_URL|g" frontend/src/utils/api.js
-
-# 4. Extract Disease
 sed -i.bak "s|https://extract-disease-[^\`'\"]*|$EXTRACT_DISEASE_URL|g" frontend/src/utils/api.js
-
-# 5. Extract Events
 sed -i.bak "s|https://extract-events-[^\`'\"]*|$EXTRACT_EVENTS_URL|g" frontend/src/utils/api.js
-
-# 6. Final Analysis
 sed -i.bak "s|https://final-analysis-[^\`'\"]*|$FINAL_ANALYSIS_URL|g" frontend/src/utils/api.js
 sed -i.bak "s|https://capricorn-final-analysis-[^\`'\"]*|$FINAL_ANALYSIS_URL|g" frontend/src/utils/api.js
-
-# 7. Send Feedback
 sed -i.bak "s|https://send-feedback-email-[^\`'\"]*|$FEEDBACK_URL|g" frontend/src/utils/api.js
-
-# 8. Process Lab
 sed -i.bak "s|https://process-lab-[^\`'\"]*|$PROCESS_LAB_URL|g" frontend/src/utils/api.js
+sed -i.bak "s|https://detect-specialty-[^\`'\"]*|$DETECT_SPECIALTY_URL|g" frontend/src/utils/api.js
+sed -i.bak "s|https://analyze-medical-image-[^\`'\"]*|$ANALYZE_IMAGE_URL|g" frontend/src/utils/api.js
 
 # Clean up .bak files
 rm -f frontend/src/utils/api.js.bak
 
-echo "✓ Updated ALL 8 function URLs in frontend/src/utils/api.js"
-echo "✓ Saved URLs to function-urls.txt for reference"
+echo "✓ Updated ALL 10 function URLs in frontend/src/utils/api.js"
 echo ""
-echo "NEXT: Rebuild and redeploy the frontend (see Section 5)"
+echo "NEXT: Rebuild and redeploy the frontend container (see Section 5)"
 ```
 
 ### 4. Frontend Configuration
@@ -607,32 +669,61 @@ Before deploying, you need to configure Firebase Authentication:
    This allows users to either sign in with their Google account or use the app anonymously.
 
 2. **Add Authorized Domains**:
-   - Still in "Authentication" → "Settings" tab
-   - Under "Authorized domains", add:
+   - In "Authentication" → "Settings" tab (or Identity Platform settings)
+   - Under "Authorized domains", ensure the following are present:
      - `localhost` (for local development)
-     - Your Firebase Hosting domain: `YOUR-APP-NICKNAME.web.app` (e.g., "capricorn-medical.web.app")
-     - Your custom domain (if applicable)
-     - Any other domains where you'll host the app
-   
-   **Important**: Any domain where your app is hosted must be added to this list, otherwise authentication will fail with a redirect_uri_mismatch error.
+     - `medical-assistant-djejr2bj2q-uc.a.run.app` (Cloud Run production domain)
+     - `medical-assistant-190811640519.us-central1.run.app` (Cloud Run regional domain)
+     - `onboarding-sandbox-477121.firebaseapp.com`
+     - `onboarding-sandbox-477121.web.app`
 
-3. **Configure OAuth Consent Screen** (if prompted):
-   - Choose "External" user type (unless using Workspace)
-   - Fill in the required application information
-   - Add your app domains to authorized domains
-   - Save the configuration
+   **Important**: Any domain where your app is hosted must be added to this list, otherwise Google popup authentication will fail with an `auth/unauthorized-domain` error.
 
-### 5. Deploy Frontend
+3. **Configure OAuth Consent Screen**:
+   - Choose "External" (or "Internal" if using Workspace)
+   - Fill in the application title (e.g. "Capricorn Medical Assistant") and support email
+   - Add your authorized domains
+   - Save configuration
 
-1. Build the application:
+### 5. Deploy Frontend to Google Cloud Run (Recommended)
+
+In production, the frontend is packaged as a Docker container running an Express static server on Node 18, deployed to Google Cloud Run:
+
+1. **Build Container with Cloud Build**:
    ```bash
-   cd frontend
-   npm install
-   npm run build
+   gcloud builds submit frontend \
+     --project="onboarding-sandbox-477121" \
+     --tag="gcr.io/onboarding-sandbox-477121/medical-assistant:latest"
    ```
 
-2. Deploy to Firebase Hosting:
+2. **Deploy Container to Cloud Run**:
    ```bash
-   # Deploy using the existing firebase.json configuration
-   firebase deploy --only hosting --project $PROJECT_ID
+   gcloud run deploy medical-assistant \
+     --image="gcr.io/onboarding-sandbox-477121/medical-assistant:latest" \
+     --platform=managed \
+     --region="us-central1" \
+     --project="onboarding-sandbox-477121" \
+     --port=8080 \
+     --memory=512Mi \
+     --cpu=1
    ```
+
+3. **Grant Public Invoker Access**:
+   ```bash
+   gcloud run services add-iam-policy-binding medical-assistant \
+     --region="us-central1" \
+     --project="onboarding-sandbox-477121" \
+     --member="allUsers" \
+     --role="roles/run.invoker"
+   ```
+
+### 6. Alternative: Deploy to Firebase Hosting
+
+If you prefer hosting the static React bundle directly on Firebase Hosting:
+
+```bash
+cd frontend
+npm install
+npm run build
+firebase deploy --only hosting --project $PROJECT_ID
+```
