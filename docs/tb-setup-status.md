@@ -2,7 +2,7 @@
 
 The approved local design is implemented on `codex/tb-imaging-setup`, based on requested fork commit `b80b609fbda310d59fbe729bd7834f2d0e9fa86a`. Cloud apply and the additional $20 working budget remain pending. No TB-phase cloud mutation, model call or paid query has occurred.
 
-The original checkout and its active `.deploy/`, configuration, source and data are retained. Five baseline hashes still match `/private/tmp/capricorn-tb-original-baseline.json`. Working checkout: `/private/tmp/capricorn-tb-fork-inspect-20261028`; permanent checkout to be prepared after final review: `/Users/xutaowang/Documents/Rutgers_work/capricorn-tb-fork`.
+The original checkout and its active `.deploy/`, configuration, source and data are retained. Five baseline hashes still match `/private/tmp/capricorn-tb-original-baseline.json`. Working checkout: `/private/tmp/capricorn-tb-fork-inspect-20261028`; verified permanent checkout: `/Users/xutaowang/Documents/Rutgers_work/capricorn-tb-fork`.
 
 ## Local verification evidence
 
