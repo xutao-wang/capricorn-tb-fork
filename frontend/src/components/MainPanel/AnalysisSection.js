@@ -39,13 +39,7 @@ const AnalysisSection = ({
   const [showProcessingMessage, setShowProcessingMessage] = useState(false);
 
 useEffect(() => {
-  console.log('autoretrieval_debug: Document retrieval conditions:', {
-    isRetrieving,
-    isProcessingArticles,
-    hasDocumentMessages,
-    articlesCount: articles ? articles.length : 0,
-    isLoadingFromHistory
-  });
+
 
   if (!hasDocumentMessages) {
     if (!isLoadingFromHistory && !isRetrieving && !isProcessingArticles) {
@@ -62,14 +56,11 @@ useEffect(() => {
     }
   }
 
-  console.log('autoretrieval_debug: Retrieval state updated:', {
-    isRetrievalComplete: !hasDocumentMessages && ((articles && articles.length > 0) || isLoadingFromHistory),
-    showProcessingMessage: !hasDocumentMessages && ((articles && articles.length > 0) || isLoadingFromHistory)
-  });
+
 }, [isRetrieving, articles, isLoadingFromHistory, isProcessingArticles, hasDocumentMessages]);
 
   return (
-    <div 
+    <div
       className={`w-full md:w-1/2 bg-surface-50 shadow-lg rounded-lg p-4 mb-4 ${fadeInClass} ${className} ${(!extractedDisease || !extractedEvents.length) ? 'opacity-25' : ''}`}
       onMouseEnter={() => extractedDisease && extractedEvents.length && setIsBox3Hovered(true)}
       onMouseLeave={() => setIsBox3Hovered(false)}
@@ -84,13 +75,11 @@ useEffect(() => {
             ) : (!isProcessingArticles && isRetrieving) ? (
               <LoadingSpinner className="h-4 w-4" />
             ) : (
-              <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-              </svg>
+<span aria-label="Paper retrieval pending">○</span>
             )}
           </div>
           <h2 className="text-xs font-medium text-gray-700 ml-2">
-            {showProcessingMessage ? "Sending instructions for paper retrieval" : "Sending instructions for paper retrieval"}
+            {hasDocumentMessages ? "Paper retrieval complete" : (isRetrieving || isProcessingArticles) ? "Retrieving papers…" : "Paper retrieval pending evidence-weight confirmation"}
           </h2>
         </div>
         <div className="flex items-center gap-2">
@@ -105,7 +94,7 @@ useEffect(() => {
             {isRetrieving || isProcessingArticles ? <LoadingSpinner /> : 'Re-fetch'}
           </button>
           )}
-          <button 
+          <button
             onClick={() => setIsPromptExpanded(!isPromptExpanded)}
             className="text-gray-500 hover:text-gray-700 focus:outline-none"
           >
@@ -128,11 +117,11 @@ useEffect(() => {
             <input
               type="number"
               min="1"
-              max="50"
+              max="1"
               className="w-20 p-1.5 border subtle-input rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-xs"
               value={numArticles}
               onChange={(e) => {
-                const value = Math.min(50, Math.max(1, parseInt(e.target.value) || 15));
+                const value = 1;
                 setNumArticles(value);
               }}
             />

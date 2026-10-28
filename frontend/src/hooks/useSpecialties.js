@@ -106,7 +106,7 @@ const useSpecialties = (isAuthReady) => {
       list.sort((a, b) => a.label.localeCompare(b.label));
       setSpecialties(list);
     } catch (error) {
-      console.error('Error loading specialties:', error);
+
     } finally {
       setIsLoading(false);
     }

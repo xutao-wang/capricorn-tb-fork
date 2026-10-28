@@ -26,23 +26,13 @@ export const initializeActiveChat = async ({
   setChatHistory,
   userId
 }) => {
-  console.log('[CHAT_DEBUG] Initializing active chat:', {
-    hasUser: !!user,
-    userId: user?.uid || userId,
-    hasExtractedDisease: !!extractedDisease,
-    hasExtractedEvents: !!extractedEvents
-  });
+
 
   try {
     const timestamp = new Date();
     const messageId = createMessageId('initial');
-    
-    console.log('[CHAT_DEBUG] Creating initial message with:', {
-      timestamp: new Date(),
-      messageId,
-      extractedDisease,
-      numEvents: extractedEvents?.length
-    });
+
+
 
     // Create the initial message that contains all the case information
     const initialMessage = {
@@ -59,17 +49,17 @@ export const initializeActiveChat = async ({
     };
 
     // Create a new chat with the initial message
-    console.log('[CHAT_DEBUG] Creating new chat in Firestore');
+
     const chatId = await createNewChat(user?.uid || userId, [initialMessage]);
-    
-    console.log('[CHAT_DEBUG] Setting active chat with ID:', chatId);
+
+
     // Set the active chat
     setActiveChat({
       id: chatId,
       messages: [initialMessage]
     });
 
-    console.log('[CHAT_DEBUG] Setting chat history with initialization message');
+
     // Update chat history
     setChatHistory([{
       id: messageId,
@@ -84,10 +74,10 @@ export const initializeActiveChat = async ({
       }
     }]);
 
-    console.log('[CHAT_DEBUG] Active chat initialization complete');
+
     return chatId;
   } catch (error) {
-    console.error('[CHAT_DEBUG] Error initializing active chat:', error);
+
     throw error;
   }
 };
@@ -111,12 +101,12 @@ export const handleChatSelect = async ({
   if (chat) {
     setActiveChat(chat);
     setHasDocumentMessages(false);
-    
+
     const messages = [];
-    
+
     // Fetch the latest messages from Firestore
     const latestMessages = await getChatMessages(userId, chat.id);
-    
+
     // Process the fetched messages
     latestMessages.forEach(msg => {
       switch (msg.type) {
@@ -130,7 +120,7 @@ export const handleChatSelect = async ({
             initialCase
           });
           break;
-          
+
         case 'message':
           messages.push({
             id: msg.messageId,
@@ -139,7 +129,7 @@ export const handleChatSelect = async ({
             timestamp: msg.timestamp
           });
           break;
-          
+
         case 'document':
           const docContent = JSON.parse(msg.content);
           messages.push({
@@ -152,7 +142,7 @@ export const handleChatSelect = async ({
           });
           setHasDocumentMessages(true);
           break;
-          
+
         case 'analysis':
           messages.push({
             id: msg.messageId,
@@ -161,7 +151,7 @@ export const handleChatSelect = async ({
             timestamp: msg.timestamp
           });
           break;
-          
+
         case 'error':
           messages.push({
             id: msg.messageId,
@@ -176,7 +166,7 @@ export const handleChatSelect = async ({
 
     // Sort messages by timestamp if needed
     messages.sort((a, b) => a.timestamp - b.timestamp);
-    
+
     setChatHistory(messages);
   } else {
     initializeNewChat();

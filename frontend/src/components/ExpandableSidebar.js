@@ -19,7 +19,7 @@ import SpecialistsPanel from './Specialists/SpecialistsPanel';
 
 const formatChatTitle = (chat) => {
   if (chat.title) return chat.title;
-  
+
   let timestamp;
   if (chat.createdAt?.seconds) {
     timestamp = new Date(chat.createdAt.seconds * 1000);
@@ -28,7 +28,7 @@ const formatChatTitle = (chat) => {
   } else {
     timestamp = new Date();
   }
-  
+
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
@@ -68,7 +68,7 @@ const ChatHistoryItem = ({ chat, isActive, onClick, onRename, onDelete }) => {
   }
 
   return (
-    <div 
+    <div
       className={`group flex items-center justify-between w-full text-left px-3 py-2 text-sm hover:bg-[#2c5282]/30 rounded-md ${
         isActive ? 'bg-[#2c5282]/30' : ''
       }`}
@@ -82,7 +82,7 @@ const ChatHistoryItem = ({ chat, isActive, onClick, onRename, onDelete }) => {
           {formatChatTitle(chat)}
         </span>
       </button>
-      
+
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           onClick={(e) => {
@@ -126,7 +126,7 @@ const ExpandableSidebar = ({ user, onChatSelect, activeChat, initializeNewChat, 
             setIsLoading(false);
           });
         } catch (err) {
-          console.error('Error loading chats:', err);
+
           setError('Failed to load chats. Please try again.');
           setIsLoading(false);
         }
@@ -147,11 +147,11 @@ const ExpandableSidebar = ({ user, onChatSelect, activeChat, initializeNewChat, 
   const handleRenameChat = async (chatId, newTitle) => {
     try {
       await updateChatTitle(user.uid, chatId, newTitle);
-      setChats(chats.map(chat => 
+      setChats(chats.map(chat =>
         chat.id === chatId ? { ...chat, title: newTitle } : chat
       ));
     } catch (error) {
-      console.error('Error renaming chat:', error);
+
     }
   };
 
@@ -164,7 +164,7 @@ const ExpandableSidebar = ({ user, onChatSelect, activeChat, initializeNewChat, 
           onChatSelect(null);
         }
       } catch (error) {
-        console.error('Error deleting chat:', error);
+
       }
     }
   };
@@ -185,7 +185,7 @@ const handleNewChat = async () => {
       onChatSelect(newChat);
       onToggle(false); // Minimize sidebar after creating new chat
     } catch (error) {
-      console.error('Error creating new chat:', error);
+
     }
   }
 };
@@ -304,7 +304,7 @@ const WrappedExpandableSidebar = ({
         wrappedOnChatSelect(newChat);
         otherProps.onToggle(false); // Minimize sidebar after creating new chat
       } catch (error) {
-        console.error('Error creating new chat:', error);
+
       }
     }
   };

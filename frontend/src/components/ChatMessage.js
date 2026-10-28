@@ -37,25 +37,11 @@ const InitialCaseMessage = ({ message, show }) => {
 const ChatMessage = React.forwardRef(({ message, showInitialCase }, ref) => {
   const [isErrorExpanded, setIsErrorExpanded] = useState(false);
 
-  console.log('[CHAT_DEBUG] ChatMessage received:', {
-    id: message.id,
-    text: message.text,
-    isUser: message.isUser,
-    type: message.type,
-    analysis: !!message.analysis,
-    hasInitialCase: !!message.initialCase,
-    extractedDisease: message.initialCase?.extractedDisease,
-    timestamp: message.timestamp
-  });
+
 
   // Add specific logging for initialization messages
   if (message.initialCase) {
-    console.log('[CHAT_DEBUG] Initialization message details:', {
-      disease: message.initialCase.extractedDisease,
-      hasEvents: !!message.initialCase.extractedEvents?.length,
-      eventCount: message.initialCase.extractedEvents?.length,
-      displayText: message.text
-    });
+
   }
 
   const isError = message.text && message.text.includes("I'm sorry, there was an error");
@@ -69,32 +55,22 @@ const ChatMessage = React.forwardRef(({ message, showInitialCase }, ref) => {
 
   return (
     <div ref={ref} className={`flex flex-col ${message.isUser ? 'items-end' : 'items-start'} mb-4`}>
-      <div 
+      <div
         className={`${isDocument || isAnalysis ? 'w-full' : 'max-w-xs md:max-w-md lg:max-w-lg xl:max-w-xl'} rounded-lg p-3 ${
-          isError 
+          isError
             ? 'bg-red-50 border border-red-200 text-red-800'
-            : message.isUser 
-              ? 'bg-surface-700 text-white' 
+            : message.isUser
+              ? 'bg-surface-700 text-white'
               : 'bg-surface-100 text-surface-800'
         }`}
       >
         <div className={`text-sm overflow-x-auto ${message.isUser ? 'text-white !important' : ''}`}>
           {(() => {
             if (isDocument) {
-              console.log('[CHAT_DEBUG] Rendering ArticleResults with:', {
-                id: message.id,
-                type: message.type,
-                hasContent: !!message.content,
-                contentType: typeof message.content,
-                hasArticles: !!message.articles,
-                articlesLength: message.articles?.length,
-                currentProgress: message.currentProgress,
-                messageKeys: Object.keys(message),
-                fullMessage: message
-              });
-              
+
+
               return (
-                <ArticleResults 
+                <ArticleResults
                   currentProgress={message.currentProgress}
                   articles={message.articles}
                 />
@@ -108,7 +84,7 @@ const ChatMessage = React.forwardRef(({ message, showInitialCase }, ref) => {
                       {message.text}
                     </div>
                     {!isErrorExpanded && (
-                      <button 
+                      <button
                         onClick={() => setIsErrorExpanded(true)}
                         className="ml-2 text-red-600 hover:text-red-800 underline text-sm"
                       >
@@ -121,7 +97,7 @@ const ChatMessage = React.forwardRef(({ message, showInitialCase }, ref) => {
                         <pre className="mt-1 whitespace-pre-wrap">
                           {message.error || "No additional error details available"}
                         </pre>
-                        <button 
+                        <button
                           onClick={() => setIsErrorExpanded(false)}
                           className="mt-2 text-red-600 hover:text-red-800 underline"
                         >

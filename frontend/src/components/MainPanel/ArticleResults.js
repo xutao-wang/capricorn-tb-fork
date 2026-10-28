@@ -14,37 +14,30 @@
 
 import React, { useState } from 'react';
 
-const ArticleResults = ({ 
-  articles, 
-  initialExpanded = true, 
-  currentProgress, 
-  totalArticles, 
-  processedArticles 
+const ArticleResults = ({
+  articles,
+  initialExpanded = true,
+  currentProgress,
+  totalArticles,
+  processedArticles
 }) => {
   const [isExpanded, setIsExpanded] = useState(initialExpanded);
 
   // Debug logging
-  console.log('[ArticleResults] Rendering with props:', {
-    articlesLength: articles?.length,
-    hasArticles: !!articles?.length,
-    currentProgress,
-    totalArticles,
-    processedArticles,
-    articles: articles
-  });
+
 
   if (!articles?.length && !currentProgress) {
-    console.log('[ArticleResults] Returning null - no articles and no progress');
+
     return null;
   }
 
-  console.log('[ArticleResults] Will render component');
+
 
   return (
     <div className="mt-4 bg-surface-50 shadow-lg rounded-lg p-4">
       <div className="flex justify-between items-center mb-2">
         <h2 className="text-sm font-medium text-gray-700">Retrieved articles</h2>
-        <button 
+        <button
           onClick={() => setIsExpanded(!isExpanded)}
           className="text-gray-500 hover:text-gray-700 focus:outline-none"
         >
@@ -59,7 +52,7 @@ const ArticleResults = ({
           )}
         </button>
       </div>
-      
+
       {currentProgress && (
         <div className="mb-4">
           <div className="text-sm text-gray-600 mb-2">Currently processing:</div>

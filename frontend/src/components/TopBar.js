@@ -16,14 +16,14 @@ import React from 'react';
 import Header from './Header/Header';
 
 const TopBar = ({ user, firstName, handleLogin, handleLogout, showUserMenu, setShowUserMenu, isAuthenticated }) => {
-  console.log('[TOPBAR_DEBUG] Rendering TopBar, isAuthenticated:', isAuthenticated, 'showUserMenu:', showUserMenu);
+
   return (
     <div className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-r from-[#1a365d] to-[#2c5282] text-white flex items-center px-4 justify-between z-50">
       <div>
         <span className="font-bold">Capricorn</span>{' '}
         <span className="font-light">| Medical Research (Demo)</span>
       </div>
-      <Header 
+      <Header
         user={user}
         firstName={firstName}
         handleLogin={handleLogin}

@@ -1,21 +1,6 @@
 {
-  "hosting": {
-    "site": "onboarding-sandbox-477121",
-    "public": "build",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ]
-  },
   "firestore": {
-    "rules": "firestore.rules",
-    "database": "capricorn-prod"
+    "database": "capricorn-dev",
+    "rules": "firestore.rules"
   }
 }

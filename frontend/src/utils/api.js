@@ -1,3 +1,6 @@
+import { authenticatedFetch } from './request';
+import { clampArticleCount, DEFAULT_ARTICLES } from './config';
+import { normalizeDisease, normalizeEvents } from './caseValidation';
 // Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,10 +17,10 @@
 
 // src/utils/api.js
 
-export const retrieveAndAnalyzeArticles = async (disease, events, specialtyId, onProgress, numArticles = 15, weightOverrides) => {
+export const retrieveAndAnalyzeArticles = async (disease, events, specialtyId, onProgress, numArticles = DEFAULT_ARTICLES, weightOverrides) => {
   try {
     // Step 1: Get PMIDs and analysis from first cloud function
-    const response = await fetch(`https://retrieve-full-articles-live-pmc-text-embedding-00-djejr2bj2q-uc.a.run.app`, {
+    const response = await authenticatedFetch(process.env.REACT_APP_RETRIEVE_ARTICLES_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -26,7 +29,7 @@ export const retrieveAndAnalyzeArticles = async (disease, events, specialtyId, o
         events_text: events.join('\n'),
         specialtyId: specialtyId,
         disease: disease,
-        num_articles: numArticles,
+        num_articles: clampArticleCount(numArticles),
         weightOverrides: weightOverrides
       }),
     });
@@ -56,30 +59,30 @@ export const retrieveAndAnalyzeArticles = async (disease, events, specialtyId, o
 
         try {
           const data = JSON.parse(line);
-          
+
           // Validate and process the data
           if (data && typeof data === 'object' && data.type) {
             onProgress(data);
           }
         } catch (parseError) {
-          console.error('Error parsing line:', line);
-          console.error('Parse error:', parseError);
+
+
         }
 
         lineEnd = buffer.indexOf('\n');
       }
     }
   } catch (error) {
-    console.error('Error:', error);
+
     throw error;
   }
 };
 
-const API_BASE_URL = 'https://sfslkz5uiq-uc.a.run.app';
+const templatesUrl = () => process.env.REACT_APP_TEMPLATES_URL;
 
 export const streamChat = async (message, userId, chatId, onChunk, specialtyId) => {
   try {
-    const response = await fetch(`https://chat-djejr2bj2q-uc.a.run.app`, {
+    const response = await authenticatedFetch(process.env.REACT_APP_CHAT_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -118,13 +121,13 @@ export const streamChat = async (message, userId, chatId, onChunk, specialtyId) 
               onChunk(parsed.text);
             }
           } catch (e) {
-            console.error('Error parsing SSE data:', e);
+
           }
         }
       }
     }
   } catch (error) {
-    console.error('Error in chat stream:', error);
+
     throw error;
   }
 };
@@ -137,7 +140,7 @@ const GENERATE_CASE_URL = process.env.REACT_APP_GENERATE_CASE_URL;
  */
 export const redactSensitiveInfo = async (text) => {
   try {
-    const response = await fetch(`https://redact-sensitive-info-djejr2bj2q-uc.a.run.app`, {
+    const response = await authenticatedFetch(process.env.REACT_APP_REDACT_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -146,14 +149,13 @@ export const redactSensitiveInfo = async (text) => {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      throw new Error( `HTTP error! status: ${response.status}`);
     }
 
     const data = await response.json();
     return data.redactedText;
   } catch (error) {
-    console.error('Error redacting sensitive information:', error);
+
     throw new Error(`Failed to redact sensitive information: ${error.message}`);
   }
 };
@@ -163,7 +165,7 @@ export const redactSensitiveInfo = async (text) => {
 // at the repo root.
 export const detectSpecialty = async (text) => {
   try {
-    const response = await fetch(`https://detect-specialty-djejr2bj2q-uc.a.run.app`, {
+    const response = await authenticatedFetch(process.env.REACT_APP_DETECT_SPECIALTY_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -175,16 +177,18 @@ export const detectSpecialty = async (text) => {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    return await response.json(); // { specialtyId, label, rationale }
+    const detected = await response.json();
+    if(detected?.isClinicalCase !== true || !detected.specialtyId) throw new Error('No clinical case was identified.');
+    return detected;
   } catch (error) {
-    console.error('Error detecting specialty:', error);
+
     throw error;
   }
 };
 
 export const extractDisease = async (text, specialtyId) => {
   try {
-    const response = await fetch(`https://extract-disease-djejr2bj2q-uc.a.run.app`, {
+    const response = await authenticatedFetch(process.env.REACT_APP_EXTRACT_DISEASE_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -197,16 +201,16 @@ export const extractDisease = async (text, specialtyId) => {
     }
 
     const data = await response.text();
-    return data.trim();
+    return normalizeDisease(parseClinicalResponse(data));
   } catch (error) {
-    console.error('Error:', error);
+
     throw error;
   }
 };
 
 export const extractEvents = async (text, specialtyId) => {
   try {
-    const response = await fetch(`https://extract-events-djejr2bj2q-uc.a.run.app`, {
+    const response = await authenticatedFetch(process.env.REACT_APP_EXTRACT_EVENTS_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -219,9 +223,9 @@ export const extractEvents = async (text, specialtyId) => {
     }
 
     const data = await response.text();
-    return data.split('"').filter(event => event.trim() && event !== ' ');
+    return normalizeEvents(data);
   } catch (error) {
-    console.error('Error:', error);
+
     throw error;
   }
 };
@@ -232,7 +236,7 @@ export const extractEvents = async (text, specialtyId) => {
  */
 export const generateSampleCase = async () => {
   try {
-    const response = await fetch(GENERATE_CASE_URL, {
+    const response = await authenticatedFetch(GENERATE_CASE_URL, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -240,13 +244,12 @@ export const generateSampleCase = async () => {
       credentials: 'include',
     });
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      throw new Error( `HTTP error! status: ${response.status}`);
     }
     const data = await response.json();
     return data.medical_case;
   } catch (error) {
-    console.error('Error generating sample case:', error);
+
     throw new Error(`Failed to generate sample case: ${error.message}`);
   }
 };
@@ -258,7 +261,7 @@ export const generateSampleCase = async () => {
  */
 export const saveTemplate = async (template) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/templates`, {
+    const response = await authenticatedFetch(templatesUrl(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -267,13 +270,12 @@ export const saveTemplate = async (template) => {
       credentials: 'include',
     });
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      throw new Error( `HTTP error! status: ${response.status}`);
     }
     const data = await response.json();
     return data.template;
   } catch (error) {
-    console.error('Error saving template:', error);
+
     throw new Error(`Failed to save template: ${error.message}`);
   }
 };
@@ -284,7 +286,7 @@ export const saveTemplate = async (template) => {
  */
 export const fetchTemplates = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/templates`, {
+    const response = await authenticatedFetch(templatesUrl(), {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -292,13 +294,12 @@ export const fetchTemplates = async () => {
       credentials: 'include',
     });
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      throw new Error( `HTTP error! status: ${response.status}`);
     }
     const data = await response.json();
     return data.templates;
   } catch (error) {
-    console.error('Error fetching templates:', error);
+
     throw new Error(`Failed to fetch templates: ${error.message}`);
   }
 };
@@ -310,7 +311,7 @@ export const fetchTemplates = async () => {
  */
 export const deleteTemplate = async (templateId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/templates/${templateId}`, {
+    const response = await authenticatedFetch(templatesUrl() ? `${templatesUrl()}/${encodeURIComponent(templateId)}` : undefined, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -318,11 +319,10 @@ export const deleteTemplate = async (templateId) => {
       credentials: 'include',
     });
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      throw new Error( `HTTP error! status: ${response.status}`);
     }
   } catch (error) {
-    console.error('Error deleting template:', error);
+
     throw new Error(`Failed to delete template: ${error.message}`);
   }
 };
@@ -337,14 +337,9 @@ export const deleteTemplate = async (templateId) => {
  */
 export const generateFinalAnalysis = async (caseNotes, disease, events, analyzedArticles, specialtyId) => {
   try {
-    console.log('LOADING_DEBUG: Starting final analysis request with:', {
-      case_notes: caseNotes,
-      disease,
-      events,
-      analyzed_articles: analyzedArticles
-    });
 
-    const response = await fetch(`https://capricorn-final-analysis-djejr2bj2q-uc.a.run.app`, {
+
+    const response = await authenticatedFetch(process.env.REACT_APP_FINAL_ANALYSIS_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -359,16 +354,15 @@ export const generateFinalAnalysis = async (caseNotes, disease, events, analyzed
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('Final analysis error response:', errorData);
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+
+      throw new Error( `HTTP error! status: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log('LOADING_DEBUG: Final analysis response received');
+
     return data.analysis;
   } catch (error) {
-    console.error('Error generating final analysis:', error);
+
     throw new Error(`Failed to generate final analysis: ${error.message}`);
   }
 };
@@ -380,7 +374,7 @@ export const generateFinalAnalysis = async (caseNotes, disease, events, analyzed
  */
 export const sendFeedback = async (feedbackData) => {
   try {
-    const response = await fetch('https://send-feedback-email-djejr2bj2q-uc.a.run.app', {
+    const response = await authenticatedFetch(process.env.REACT_APP_FEEDBACK_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -389,13 +383,12 @@ export const sendFeedback = async (feedbackData) => {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      throw new Error( `HTTP error! status: ${response.status}`);
     }
 
     return await response.json();
   } catch (error) {
-    console.error('Error sending feedback:', error);
+
     throw new Error(`Failed to send feedback: ${error.message}`);
   }
 };
@@ -407,7 +400,7 @@ export const sendFeedback = async (feedbackData) => {
  */
 export const processLabPDF = async (pdfBase64) => {
   try {
-    const response = await fetch('https://process-lab-djejr2bj2q-uc.a.run.app', {
+    const response = await authenticatedFetch(process.env.REACT_APP_PROCESS_LAB_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -416,19 +409,18 @@ export const processLabPDF = async (pdfBase64) => {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      throw new Error( `HTTP error! status: ${response.status}`);
     }
 
     const result = await response.json();
-    
+
     if (result.success) {
       return result.data;
     } else {
-      throw new Error(result.error || 'Failed to process PDF');
+      throw new Error( 'Failed to process PDF');
     }
   } catch (error) {
-    console.error('Error processing lab PDF:', error);
+
     throw new Error(`Failed to process lab PDF: ${error.message}`);
   }
 };
@@ -444,7 +436,7 @@ export const processLabPDF = async (pdfBase64) => {
  */
 export const analyzeMedicalImage = async (imageBase64, fileName = '', specialtyId = 'tuberculosis') => {
   try {
-    const response = await fetch('https://analyze-medical-image-djejr2bj2q-uc.a.run.app', {
+    const response = await authenticatedFetch(process.env.REACT_APP_ANALYZE_IMAGE_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -457,8 +449,7 @@ export const analyzeMedicalImage = async (imageBase64, fileName = '', specialtyI
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      throw new Error( `HTTP error! status: ${response.status}`);
     }
 
     const result = await response.json();
@@ -466,11 +457,13 @@ export const analyzeMedicalImage = async (imageBase64, fileName = '', specialtyI
     if (result.success) {
       return result.data;
     } else {
-      throw new Error(result.error || 'Failed to analyze medical image');
+      throw new Error( 'Failed to analyze medical image');
     }
   } catch (error) {
-    console.error('Error analyzing medical image:', error);
+
     throw new Error(`Failed to analyze medical image: ${error.message}`);
   }
 };
 
+
+const parseClinicalResponse = text => { try { return JSON.parse(text); } catch { return text; } };

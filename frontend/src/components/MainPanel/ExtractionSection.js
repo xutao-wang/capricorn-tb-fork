@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import React, { useState, useEffect } from 'react';
+import { isValidExtraction } from '../../utils/caseValidation';
 
 const fadeInClass = "transition-opacity duration-1000 ease-in-out";
 
@@ -29,22 +30,23 @@ const ExtractionSection = ({
   // Ensure extractedEvents is always an array
   const events = Array.isArray(extractedEvents) ? extractedEvents : [];
 
+  const complete=isValidExtraction(extractedDisease,events,detectedSpecialty);
   useEffect(() => {
-    if (detectedSpecialty && extractedDisease && events.length > 0) {
-      onExtractionComplete();
+    if (complete) {
+      onExtractionComplete?.();
     }
-  }, [detectedSpecialty, extractedDisease, events, onExtractionComplete]);
+  }, [complete,onExtractionComplete]);
 
   return (
     <div className={`w-full md:w-1/2 bg-surface-50 shadow-lg rounded-lg p-4 mb-4 ${fadeInClass} ${className}`}>
       <div className="mb-1 flex justify-between items-center">
         <div className="flex items-center">
-          <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          {complete && <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-          </svg>
-          <h2 className="text-xs font-medium text-gray-700 ml-2">Specialty identified, disease and actionable events extracted</h2>
+          </svg>}
+          <h2 className="text-xs font-medium text-gray-700 ml-2">{complete?'Specialty identified, disease and actionable events extracted':'Case extraction pending'}</h2>
         </div>
-        <button 
+        <button
           onClick={() => setIsExpanded(!isExpanded)}
           className="text-gray-500 hover:text-gray-700 focus:outline-none"
         >

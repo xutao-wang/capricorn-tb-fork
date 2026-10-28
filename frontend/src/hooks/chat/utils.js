@@ -17,7 +17,7 @@ import { db } from '../../firebase';
 
 export const getLatestMessages = async (userId, chatId) => {
   if (!userId || !chatId) {
-    console.error('Missing userId or chatId in getLatestMessages');
+
     return [];
   }
   try {
@@ -28,7 +28,7 @@ export const getLatestMessages = async (userId, chatId) => {
     }
     return [];
   } catch (error) {
-    console.error('Error getting latest messages:', error);
+
     return [];
   }
 };

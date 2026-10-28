@@ -28,7 +28,7 @@ import CopyButton from '../CopyButton';
 import PrintButton from '../PrintButton';
 
 const LoadingSpinner = ({ message }) => {
-  console.log('LOADING_DEBUG: LoadingSpinner rendered with message:', message);
+
   return (
     <div className="flex justify-center items-center p-4">
       <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-200 border-t-surface-700"></div>
@@ -37,10 +37,10 @@ const LoadingSpinner = ({ message }) => {
   );
 };
 
-const ChatContainer = ({ 
-  chatHistory, 
-  isGeneratingSample, 
-  isLoadingDocs, 
+const ChatContainer = ({
+  chatHistory,
+  isGeneratingSample,
+  isLoadingDocs,
   isLoadingAnalysis,
   currentProgress,
   currentArticleData,
@@ -93,12 +93,12 @@ const ChatContainer = ({
 
   useEffect(() => {
     if (shouldUseScrollEffect) {
-      console.log('[ANALYSIS_LOAD] Applying scroll effect');
+
       if (lastMessage && lastMessage.analysis && analysisRef.current) {
-        console.log('[ANALYSIS_LOAD] Scrolling to top of analysis');
+
         analysisRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
       } else if (containerRef.current) {
-        console.log('[ANALYSIS_LOAD] Scrolling to bottom');
+
         containerRef.current.scrollTop = containerRef.current.scrollHeight;
       }
       // Reset the flag after scrolling
@@ -107,8 +107,8 @@ const ChatContainer = ({
   }, [shouldUseScrollEffect, lastMessage, chatHistory]);
 
   useEffect(() => {
-    console.log('[ANALYSIS_LOAD] chatHistory length:', chatHistory.length);
-    console.log('[ANALYSIS_LOAD] Last message in chatHistory:', chatHistory[chatHistory.length - 1]);
+
+
   }, [chatHistory]);
 
   useEffect(() => {
@@ -119,16 +119,8 @@ const ChatContainer = ({
   }, [showInitialCase]);
 
   // Add detailed logging for chat initialization debugging
-  console.log('[CHAT_DEBUG] ChatContainer render with chatHistory length:', chatHistory.length);
-  console.log('[CHAT_DEBUG] Full chatHistory details:', chatHistory.map(msg => ({
-    id: msg.id,
-    type: msg.type,
-    hasAnalysis: !!msg.analysis,
-    hasInitialCase: !!msg.initialCase,
-    extractedDisease: msg.initialCase?.extractedDisease,
-    text: msg.text,
-    timestamp: msg.timestamp
-  })));
+
+
   return (
     <div ref={containerRef} className="flex-1 overflow-y-auto space-y-4" style={{ paddingBottom: `calc(${chatInputHeight}px + 6rem)` }}>
       <div className="px-4">
@@ -140,23 +132,16 @@ const ChatContainer = ({
             const nextAnalysis = chatHistory.slice(index + 1).find(m => m.analysis);
             // Find if there's a document message after this one
             const nextDocument = chatHistory.slice(index + 1).find(m => m.type === 'document');
-            
+
             return (
               <React.Fragment key={msg.id}>
                 {/* Show regular messages and streamed messages */}
                 {/* Add logging for message rendering conditions */}
-                {console.log('[CHAT_DEBUG] Evaluating message:', {
-                  id: msg.id,
-                  hasAnalysis: !!msg.analysis,
-                  hasType: !!msg.type,
-                  hasText: msg.text !== undefined,
-                  hasInitialCase: !!msg.initialCase,
-                  extractedDisease: msg.initialCase?.extractedDisease
-                })}
+                {}
                 {((!msg.analysis && !msg.type) || (msg.text !== undefined)) && (
                   <>
-    <ChatMessage 
-      message={msg} 
+    <ChatMessage
+      message={msg}
       ref={index === chatHistory.length - 1 ? lastMessageRef : null}
       showInitialCase={showInitialCase}
     />
@@ -214,7 +199,7 @@ const ChatContainer = ({
                     {/* Show incremental table updates */}
                     {msg.initialCase?.extractedDisease && currentProgress && !chatHistory.find(m => m.type === 'document') && showArticleResults && (
                       <div className="ml-4 mt-2">
-                        <ArticleResults 
+                        <ArticleResults
                           articles={articles}
                           initialExpanded={initialArticleResultsExpanded}
                           currentProgress={currentProgress}
@@ -225,21 +210,13 @@ const ChatContainer = ({
                     )}
                   </>
                 )}
-                
+
                 {/* Show document type messages (article table) */}
                 {msg.type === 'document' && (
-                  console.log('[CHAT_DEBUG] Rendering ArticleResults with:', {
-                    id: msg.id,
-                    type: msg.type,
-                    hasArticles: !!msg.articles?.length,
-                    articlesLength: msg.articles?.length,
-                    currentProgress: msg.currentProgress,
-                    timestamp: msg.timestamp,
-                    fullMessage: msg
-                  }),
+
                   <div className="ml-4 mt-2">
                     {showArticleResults && (
-                      <ArticleResults 
+                      <ArticleResults
                         currentProgress={msg.currentProgress}
                         articles={msg.articles}
                         initialExpanded={initialArticleResultsExpanded}
@@ -267,12 +244,7 @@ const ChatContainer = ({
                     </div>
                   </div>
                 )}
-                {console.log('[ANALYSIS_LOAD] Rendering message:', {
-                  id: msg.id,
-                  isAnalysis: !!msg.analysis,
-                  isLastMessage: msg === chatHistory[chatHistory.length - 1],
-                  analysisLength: msg.analysis ? msg.analysis.length : 0
-                })}
+                {}
               </React.Fragment>
             );
           })}
@@ -292,7 +264,7 @@ const ChatContainer = ({
             <LoadingSpinner message="Preparing final analysis..." />
           </div>
         )}
-        {console.log('[ANALYSIS_LOAD] isLoadingAnalysis:', isLoadingAnalysis)}
+        {}
       </div>
       {/* Invisible element that serves as scroll target */}
       <div ref={messageEndRef} />
@@ -300,7 +272,7 @@ const ChatContainer = ({
       {hasAnalysis && !isGeneratingSample && !isLoadingDocs && !isLoadingAnalysis && (
         <div className="absolute bottom-0 left-0 right-0 pb-4">
           <div className="relative w-full bg-transparent">
-            <ChatInput 
+            <ChatInput
               message={message}
               setMessage={setMessage}
               handleSendMessage={handleSendMessage}

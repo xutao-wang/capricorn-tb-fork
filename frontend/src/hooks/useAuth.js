@@ -14,109 +14,76 @@
 
 // src/hooks/useAuth.js
 import { useCallback, useState, useEffect } from 'react';
-import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from 'firebase/auth';
-import { signInAnonymousUser } from '../firebase';
+import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../firebase';
+import { REQUEST_ERROR_EVENT } from '../utils/request';
 
 export const useAuth = (setShowUserMenu) => {
+  const [authError, setAuthError] = useState('');
   const [user, setUser] = useState(null);
   const [firstName, setFirstName] = useState('');
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authError, setAuthError] = useState(null);
-  const auth = getAuth();
 
   const handleLogin = useCallback(async () => {
-    console.log('[AUTH_DEBUG] handleLogin called');
+
+    setAuthError('');
     const provider = new GoogleAuthProvider();
     provider.addScope('profile');
     provider.addScope('email');
     try {
-      console.log('[AUTH_DEBUG] Attempting to sign in with popup');
+
       const result = await signInWithPopup(auth, provider);
-      console.log('[AUTH_DEBUG] Sign in successful, user:', result.user);
+
       const user = result.user;
       const displayName = user.displayName || '';
       const firstName = displayName.split(' ')[0];
       setFirstName(firstName);
-      setIsAuthenticated(true);
-      setAuthError(null);
-      console.log('[AUTH_DEBUG] Authentication state updated:', { firstName, isAuthenticated: true });
+      setIsAuthenticated(!user.isAnonymous);
+
     } catch (error) {
-      console.error('[AUTH_DEBUG] Error signing in with Google:', error);
+      const message = 'Google sign-in failed. Please try again.';
+      setAuthError(message);
+      window.dispatchEvent(new CustomEvent(REQUEST_ERROR_EVENT, { detail: message }));
       setIsAuthenticated(false);
-      if (error.code === 'auth/operation-not-allowed') {
-        const msg = 'Google Sign-in is not yet enabled in the Firebase Console.\n\nPlease enable it under:\nFirebase Console -> Authentication -> Sign-in method -> Google.';
-        setAuthError(msg);
-        alert(msg);
-      } else if (error.code === 'auth/popup-blocked') {
-        const msg = 'The sign-in popup was blocked by your browser. Please allow popups for this site.';
-        setAuthError(msg);
-        alert(msg);
-      } else if (error.code !== 'auth/popup-closed-by-user') {
-        setAuthError(error.message);
-        alert(`Authentication error: ${error.message}`);
-      }
     }
-  }, [auth]);
+  }, []);
 
   const handleLogout = useCallback(async () => {
     try {
       await signOut(auth);
       setShowUserMenu(false);
     } catch (error) {
-      console.error('Error signing out:', error);
+
     }
-  }, [auth, setShowUserMenu]);
+  }, [setShowUserMenu]);
 
   // Set up auth state listener
   useEffect(() => {
-    console.log('[AUTH_MENU_DEBUG] useAuth: Setting up auth state listener');
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      console.log('[AUTH_MENU_DEBUG] useAuth: Auth state changed:', {
-        hasUser: !!firebaseUser,
-        isAnonymous: firebaseUser?.isAnonymous,
-        uid: firebaseUser?.uid
-      });
 
-      if (firebaseUser && !firebaseUser.isAnonymous) {
-        console.log('[AUTH_MENU_DEBUG] useAuth: Authenticated user detected:', firebaseUser.uid);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+
+      if (firebaseUser) {
+
         setUser(firebaseUser);
         const displayName = firebaseUser.displayName || '';
-        const firstName = displayName.split(' ')[0] || 'Doctor';
+        const firstName = displayName.split(' ')[0];
         setFirstName(firstName);
-        setIsAuthenticated(true);
-      } else if (firebaseUser && firebaseUser.isAnonymous) {
-        console.log('[AUTH_MENU_DEBUG] useAuth: Existing user is anonymous guest');
-        setUser(firebaseUser);
+        setIsAuthenticated(!firebaseUser.isAnonymous);
+      } else {
+
+        setUser(null);
         setFirstName('');
         setIsAuthenticated(false);
-      } else {
-        console.log('[AUTH_MENU_DEBUG] useAuth: No user, signing in anonymously');
-        try {
-          const anonymousUser = await signInAnonymousUser();
-          console.log('[AUTH_MENU_DEBUG] useAuth: Anonymous sign in result:', {
-            success: !!anonymousUser,
-            uid: anonymousUser?.uid,
-            isAnonymous: anonymousUser?.isAnonymous
-          });
-          setUser(anonymousUser);
-          setFirstName('');
-          setIsAuthenticated(false);
-        } catch (error) {
-          console.error('[AUTH_MENU_DEBUG] useAuth: Anonymous sign in error:', error);
-          setIsAuthenticated(false);
-        }
       }
       setLoading(false);
     });
 
     return () => {
-      console.log('[AUTH_MENU_DEBUG] useAuth: Cleaning up auth state listener');
+
       unsubscribe();
     };
-  }, [auth]);
+  }, []);
 
-  console.log('[AUTH_MENU_DEBUG] useAuth: Current auth state:', { user, isAuthenticated, firstName });
-
-  return { user, firstName, loading, handleLogin, handleLogout, isAuthenticated };
+  return { authError, user, firstName, loading, handleLogin, handleLogout, isAuthenticated };
 };

@@ -37,7 +37,7 @@ const useChat = (user, selectedSpecialtyId) => {
       try {
         await deleteChat(userId, activeChat.id);
       } catch (error) {
-        console.error('Error deleting temporary chat:', error);
+
       }
     }
 

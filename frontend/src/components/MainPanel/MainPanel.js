@@ -80,7 +80,7 @@ const MainPanel = ({
 
     const chatRef = collection(db, `chats/${user.uid}/conversations`);
     const q = query(chatRef);
-    
+
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const hasAnalysis = querySnapshot.docs.some(doc => {
         const messages = doc.data().messages || [];
@@ -104,10 +104,10 @@ const MainPanel = ({
     return findLastIndex(history, msg => msg.type === 'message');
   }, []);
 
-  const handleExtractWithWelcomeText = useCallback(() => {
+  const handleExtractWithWelcomeText = useCallback((notes,labs) => {
     setShowWelcomeText(false);
-    console.log('[FADE_DEBUG] Starting extraction process');
-    handleExtract();
+
+    handleExtract(notes,labs);
   }, [handleExtract]);
 
   // Update state without scroll effects
@@ -165,11 +165,11 @@ const MainPanel = ({
               }}
               showCaseInput={showCaseInput}
               handleClearAll={() => {
-                console.log('[CLEAR_DEBUG] MainPanel: handleClearAll called');
+
                 handleClearAll();
                 setCaseNotes('');
                 setLabResults('');
-                console.log('[CLEAR_DEBUG] MainPanel: After handleClearAll - caseNotes:', caseNotes, 'labResults:', labResults);
+
               }}
               numArticles={numArticles}
               setNumArticles={setNumArticles}
@@ -186,7 +186,7 @@ const MainPanel = ({
         <WelcomeText show={showWelcomeText} firstName={firstName} />
       </div>
       <div ref={chatContainerRef} className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden mt-24">
-          <ChatContainer 
+          <ChatContainer
             chatInputHeight={CHAT_INPUT_HEIGHT}
             chatHistory={chatHistory}
             isGeneratingSample={isGeneratingSample}

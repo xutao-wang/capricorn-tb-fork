@@ -16,16 +16,16 @@
 import React from 'react';
 
 const UserMenu = ({ user, firstName, handleLogout, showUserMenu, setShowUserMenu, isAuthenticated }) => {
-  console.log('[USER_MENU_DEBUG] UserMenu: Rendering, isAuthenticated:', isAuthenticated, 'showUserMenu:', showUserMenu);
+
 
   if (!isAuthenticated) {
     return null;
   }
 
   const toggleUserMenu = () => {
-    console.log('[USER_MENU_DEBUG] UserMenu: Toggling user menu, current state:', showUserMenu);
+
     setShowUserMenu(!showUserMenu);
-    console.log('[USER_MENU_DEBUG] UserMenu: New state after toggle:', !showUserMenu);
+
   };
 
   return (
@@ -52,7 +52,7 @@ const UserMenu = ({ user, firstName, handleLogout, showUserMenu, setShowUserMenu
           <div className="px-4 py-2 text-sm text-gray-600">{user?.email}</div>
           <button
             onClick={() => {
-              console.log('[USER_MENU_DEBUG] UserMenu: Logout button clicked');
+
               handleLogout();
               setShowUserMenu(false);
             }}

@@ -26,7 +26,7 @@ const SignOut = () => {
       await signOut(auth);
       navigate('/signin');
     } catch (error) {
-      console.error('Error signing out:', error);
+
     }
   };
 

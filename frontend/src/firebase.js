@@ -47,7 +47,11 @@ const app = initializeApp(firebaseConfig);
 
 // Get Auth and Firestore instances
 export const auth = getAuth(app);
-export const db = getFirestore(app, process.env.REACT_APP_FIREBASE_DATABASE_ID || "capricorn-eu");
+const databaseId = process.env.REACT_APP_FIREBASE_DATABASE_ID;
+if (!databaseId) {
+  throw new Error('REACT_APP_FIREBASE_DATABASE_ID must be configured explicitly.');
+}
+export const db = getFirestore(app, databaseId);
 
 // Helper functions for chat operations
 // In firebase.js
@@ -61,7 +65,7 @@ export const createNewChat = async (userId, initialMessages) => {
     });
     return chatRef.id;
   } catch (error) {
-    console.error('Error creating new chat:', error);
+
     throw error;
   }
 };
@@ -74,7 +78,7 @@ export const addMessageToChat = async (userId, chatId, message) => {
       updatedAt: new Date()
     });
   } catch (error) {
-    console.error('Error adding message to chat:', error);
+
     throw error;
   }
 };
@@ -84,13 +88,13 @@ export const getUserChats = async (userId) => {
     const chatsRef = collection(db, `chats/${userId}/conversations`);
     const q = query(chatsRef, orderBy('updatedAt', 'desc'));
     const querySnapshot = await getDocs(q);
-    
+
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
   } catch (error) {
-    console.error('Error getting user chats:', error);
+
     throw error;
   }
 };
@@ -103,7 +107,7 @@ export const updateChatTitle = async (userId, chatId, newTitle) => {
       updatedAt: new Date()
     });
   } catch (error) {
-    console.error('Error updating chat title:', error);
+
     throw error;
   }
 };
@@ -113,7 +117,7 @@ export const deleteChat = async (userId, chatId) => {
     const chatRef = doc(db, `chats/${userId}/conversations/${chatId}`);
     await deleteDoc(chatRef);
   } catch (error) {
-    console.error('Error deleting chat:', error);
+
     throw error;
   }
 };
@@ -122,16 +126,16 @@ export const getChatMessages = async (userId, chatId) => {
   try {
     const chatRef = doc(db, `chats/${userId}/conversations/${chatId}`);
     const chatDoc = await getDoc(chatRef);
-    
+
     if (chatDoc.exists()) {
       const chatData = chatDoc.data();
       return chatData.messages || [];
     } else {
-      console.error('Chat document does not exist');
+
       return [];
     }
   } catch (error) {
-    console.error('Error getting chat messages:', error);
+
     throw error;
   }
 };
@@ -142,7 +146,7 @@ export const signInAnonymousUser = async () => {
     const userCredential = await signInAnonymously(auth);
     return userCredential.user;
   } catch (error) {
-    console.error("Error signing in anonymously:", error);
+
     return null;
   }
 };
@@ -158,7 +162,7 @@ export const getChatDocumentsRealTime = (userId, callback) => {
     }));
     callback(chats);
   }, (error) => {
-    console.error("Error getting real-time chat documents:", error);
+
   });
 };
 
@@ -169,7 +173,7 @@ export const getSpecialties = async () => {
     const querySnapshot = await getDocs(specialtiesRef);
     return querySnapshot.docs.map(doc => doc.data());
   } catch (error) {
-    console.error('Error getting specialties:', error);
+
     throw error;
   }
 };
@@ -183,7 +187,7 @@ export const getSpecialtyById = async (specialtyId) => {
     const specialtyDoc = await getDoc(specialtyRef);
     return specialtyDoc.exists() ? specialtyDoc.data() : null;
   } catch (error) {
-    console.error('Error getting specialty:', error);
+
     throw error;
   }
 };
@@ -193,7 +197,7 @@ export const createSpecialty = async (specialty) => {
     const specialtyRef = doc(db, `specialties/${specialty.id}`);
     await setDoc(specialtyRef, specialty);
   } catch (error) {
-    console.error('Error creating specialty:', error);
+
     throw error;
   }
 };
@@ -219,7 +223,7 @@ export const updateSpecialty = async (specialtyId, updatedFields, editorUid) => 
       lastEditedAt: new Date(),
     });
   } catch (error) {
-    console.error('Error updating specialty:', error);
+
     throw error;
   }
 };
@@ -237,7 +241,7 @@ export const getUserWeightPresets = async (uid, specialtyId) => {
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
-    console.error('Error getting weight presets:', error);
+
     throw error;
   }
 };
@@ -254,7 +258,7 @@ export const saveUserWeightPreset = async (uid, specialtyId, label, weights) => 
     });
     return presetRef.id;
   } catch (error) {
-    console.error('Error saving weight preset:', error);
+
     throw error;
   }
 };
@@ -263,7 +267,7 @@ export const deleteUserWeightPreset = async (uid, presetId) => {
   try {
     await deleteDoc(doc(db, `users/${uid}/weightPresets/${presetId}`));
   } catch (error) {
-    console.error('Error deleting weight preset:', error);
+
     throw error;
   }
 };

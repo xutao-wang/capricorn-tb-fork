@@ -30,7 +30,10 @@ import { useAuth } from './hooks/useAuth';
 import useChat from './hooks/useChat';
 
 // API
-import { generateSampleCase, extractDisease, extractEvents, retrieveAndAnalyzeArticles, generateFinalAnalysis, sendFeedback, detectSpecialty } from './utils/api';
+import { redactSensitiveInfo, generateSampleCase, extractDisease, extractEvents, retrieveAndAnalyzeArticles, generateFinalAnalysis, sendFeedback, detectSpecialty } from './utils/api';
+import { prepareClinicalCase, isValidExtraction } from './utils/caseValidation';
+import { DEFAULT_ARTICLES } from './utils/config';
+import { REQUEST_ERROR_EVENT } from './utils/request';
 import { getSpecialtyById } from './firebase';
 
 // Preset Data
@@ -44,6 +47,9 @@ const MedicalAssistantUI = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isGeneratingSample, setIsGeneratingSample] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [submissionError,setSubmissionError] = useState('');
+  const [localIntroduction,setLocalIntroduction] = useState('');
+  useEffect(()=>{const handler=event=>setSubmissionError(event.detail);window.addEventListener(REQUEST_ERROR_EVENT,handler);return ()=>window.removeEventListener(REQUEST_ERROR_EVENT,handler);},[]);
   const [extractedDisease, setExtractedDisease] = useState('');
   const [extractedEvents, setExtractedEvents] = useState([]);
   const [isBox2Hovered, setIsBox2Hovered] = useState(false);
@@ -56,7 +62,7 @@ const MedicalAssistantUI = () => {
   const [totalArticles, setTotalArticles] = useState(0);
   const [currentArticleData, setCurrentArticleData] = useState(null);
   const [isPromptExpanded, setIsPromptExpanded] = useState(true);
-  const [numArticles, setNumArticles] = useState(15);
+  const [numArticles, setNumArticles] = useState(DEFAULT_ARTICLES);
   const [caseNotes, setCaseNotes] = useState('');
   const [labResults, setLabResults] = useState('');
   const [isNewChat, setIsNewChat] = useState(true);
@@ -71,20 +77,20 @@ const handleSidebarToggle = () => {
   setIsSidebarExpanded(prevState => !prevState);
 };
 
-  console.log('MedicalAssistantUI: setCaseNotes is a function:', typeof setCaseNotes === 'function');
 
-  const { user, firstName, loading, handleLogin, handleLogout, isAuthenticated } = useAuth();
-  console.log('[AUTH_MENU_DEBUG] MedicalAssistantUI: auth state:', { user, isAuthenticated, firstName, showUserMenu });
+
+  const { user, firstName, loading, handleLogin, handleLogout, isAuthenticated } = useAuth(setShowUserMenu);
+
 
   useEffect(() => {
-    console.log('[AUTH_MENU_DEBUG] MedicalAssistantUI: Authentication state changed:', { isAuthenticated, firstName, showUserMenu });
+
   }, [isAuthenticated, firstName, showUserMenu]);
 
   const handleToggleUserMenu = () => {
-    console.log('[AUTH_MENU_DEBUG] MedicalAssistantUI: Toggling user menu');
+
     setShowUserMenu(prevState => !prevState);
   };
-  
+
   // Auto-detected specialty persona for the current case -- see
   // docs/auto-specialty-detection-plan.md at the repo root. Set once per
   // case by handleExtract, before extractDisease/extractEvents run (those
@@ -114,7 +120,7 @@ const handleSidebarToggle = () => {
     initializeActiveChat
   } = useChat(user, detectedSpecialty?.specialtyId);
 
-  const hasDocumentMessages = useMemo(() => 
+  const hasDocumentMessages = useMemo(() =>
     chatHistory.some(msg => msg.type === 'document' || msg.documents),
     [chatHistory]
   );
@@ -152,7 +158,7 @@ const handleSidebarToggle = () => {
       const sampleCase = await generateSampleCase();
       setMessage(sampleCase);
     } catch (error) {
-      console.error('Error generating sample case:', error);
+
     }
     setIsGeneratingSample(false);
   };
@@ -186,73 +192,26 @@ const handleSidebarToggle = () => {
     setIsLoadingFromHistory(false);
   }, [chatHistory]);
 
-const handleExtract = async () => {
-  console.log('[CHAT_DEBUG] Starting extraction process');
+const handleExtract = async (submittedNotes = caseNotes, submittedLabs = labResults) => {
+  if(isProcessing)return;
+  setSubmissionError('');setLocalIntroduction('');
+  setExtractedDisease('');setExtractedEvents([]);setDetectedSpecialty(null);
+  setDetectedSpecialtyConfig(null);setWeightsConfirmed(false);setWeightOverrides(null);
+  setShouldRetrieve(false);setJustExtracted(false);retrievalAttemptedRef.current=false;
+  setIsProcessing(true);
   try {
-    setIsProcessing(true);
-    console.log('[CHAT_DEBUG] User state:', {
-      isAuthenticated: !!user,
-      userId: user?.uid,
-      isAnonymous: user?.isAnonymous
-    });
-    // Combine case notes and lab results with clear separation
-    const combinedNotes = [
-      "Case Notes:",
-      caseNotes,
-      "\nLab Results:",
-      labResults
-    ].join('\n\n');
-
-    console.log('[CHAT_DEBUG] Detecting specialty from case notes');
-    const detected = await detectSpecialty(combinedNotes);
-    console.log('[CHAT_DEBUG] Detected specialty:', detected);
-    setDetectedSpecialty(detected);
-
-    // Fetch the full specialty config so the evidence-weights panel can
-    // show sliders defaulting to this specialty's configured scoring
-    // values. See docs/evidence-weighting-plan-v1.md at the repo root.
-    try {
-      const config = await getSpecialtyById(detected.specialtyId);
-      setDetectedSpecialtyConfig(config);
-    } catch (error) {
-      console.error('[CHAT_DEBUG] Error fetching specialty config:', error);
-    }
-
-    console.log('[CHAT_DEBUG] Extracting disease and events from notes');
-    const [disease, events] = await Promise.all([
-      extractDisease(combinedNotes, detected.specialtyId),
-      extractEvents(combinedNotes, detected.specialtyId)
-    ]);
-    console.log('[CHAT_DEBUG] Extraction results:', { disease, events });
-    setExtractedDisease(disease);
-    setExtractedEvents(events);
-    setIsBox2Hovered(true); // Keep box 2 solid after extraction
-
-    // Initialize active chat with the extracted information
-    try {
-      console.log('[CHAT_DEBUG] Initializing active chat with extracted data');
-      await initializeActiveChat(caseNotes, labResults, disease, events);
-      console.log('[CHAT_DEBUG] Chat initialization successful');
-      
-      // Reset the retrieval attempt ref, set justExtracted to true, and set shouldRetrieve to true
-      retrievalAttemptedRef.current = false;
-      setJustExtracted(true);
-      setShouldRetrieve(true);
-    } catch (error) {
-      console.error('[CHAT_DEBUG] Error initializing chat:', error);
-    }
-  } catch (error) {
-    console.error('[CHAT_DEBUG] Extraction error:', error);
-    if (error.message.includes('Failed to fetch')) {
-      setExtractedDisease('Network error. Please check your connection and try again.');
-      setExtractedEvents(['Network error. Please check your connection and try again.']);
-    } else {
-      setExtractedDisease(error.message || 'Error extracting disease. Please try again.');
-      setExtractedEvents([error.message || 'Error extracting events. Please try again.']);
-    }
-  } finally {
-    setIsProcessing(false);
-  }
+    const result=await prepareClinicalCase(submittedNotes,submittedLabs,{redactSensitiveInfo,detectSpecialty,extractDisease,extractEvents});
+    if(result.kind==='introduction'){setLocalIntroduction(result.message);return;}
+    const config=await getSpecialtyById(result.detected.specialtyId);
+    if(!config)throw Error('Evidence weights are unavailable for this specialty. Please try again.');
+    await initializeActiveChat(result.caseNotes,result.labResults,result.disease,result.events);
+    setCaseNotes(result.caseNotes);setLabResults(result.labResults);
+    setDetectedSpecialty(result.detected);setDetectedSpecialtyConfig(config);
+    setExtractedDisease(result.disease);setExtractedEvents(result.events);
+    setJustExtracted(true);setShouldRetrieve(true);
+  } catch {
+    setSubmissionError('Case extraction could not be completed. Check that the input contains a clinical case and actionable findings, then try again. Redaction or service failures stop submission.');
+  } finally {setIsProcessing(false);}
 };
 
   const handleExampleLoad = (exampleCaseNotes, exampleLabResults) => {
@@ -261,8 +220,9 @@ const handleExtract = async () => {
   };
 
   const handleClearAll = useCallback(() => {
-    console.log('[CLEAR_DEBUG] MedicalAssistantUI: handleClearAll called');
-    console.log('[CLEAR_DEBUG] Before clear - caseNotes:', caseNotes, 'labResults:', labResults);
+    setSubmissionError('');setLocalIntroduction('');
+
+
     setCaseNotes('');
     setLabResults('');
     setExtractedDisease('');
@@ -281,36 +241,26 @@ const handleExtract = async () => {
     setIsPromptExpanded(true);
     setIsNewChat(true);
     initializeNewChat();
-    console.log('[CLEAR_DEBUG] MedicalAssistantUI: All states reset');
-    
+
+
     // Force a re-render to ensure the UI updates
     setTimeout(() => {
-      console.log('[CLEAR_DEBUG] After timeout - caseNotes:', caseNotes, 'labResults:', labResults);
+
     }, 0);
   }, [setCaseNotes, setLabResults, setExtractedDisease, setExtractedEvents, setDetectedSpecialty, setDetectedSpecialtyConfig, setWeightOverrides, setWeightsConfirmed, initializeNewChat, caseNotes, labResults]);
 
   const handleConfirmWeights = useCallback((weights) => {
-    console.log('[WEIGHTS_DEBUG] Doctor confirmed evidence weights:', weights);
+
     setWeightOverrides(weights);
     setWeightsConfirmed(true);
   }, []);
 
   const handleRetrieve = async () => {
-    console.log('Retrieval triggered. Conditions:', {
-      isProcessingArticles,
-      extractedDisease,
-      extractedEventsLength: extractedEvents.length,
-      justExtracted,
-      isRetrieving,
-      hasDocumentMessages,
-      isNewChat,
-      hasCaseNotes: !!caseNotes,
-      hasLabResults: !!labResults
-    });
+
 
     // Check if retrieval should actually occur
-    if (isProcessingArticles || !extractedDisease || !extractedEvents.length) {
-      console.log('Retrieval aborted due to conditions not met');
+    if (isProcessingArticles || !weightsConfirmed || !isValidExtraction(extractedDisease,extractedEvents,detectedSpecialty)) {
+
       return;
     }
 
@@ -349,15 +299,11 @@ const handleExtract = async () => {
               }
             } else if (data.data.status === 'complete') {
               setCurrentProgress(`Article analysis complete. Generating final analysis...`);
-              console.log('All articles processed. Total articles:', processedArticles.length);
-              
+
+
               // First, send the document message
-              console.log('[MEDICAL_UI] Creating document message with:', {
-                processedArticlesCount: processedArticles.length,
-                currentProgress: currentProgress,
-                articlesData: processedArticles
-              });
-              
+
+
               const documentsContent = {
                 type: 'document',
                 content: {
@@ -365,21 +311,15 @@ const handleExtract = async () => {
                   currentProgress: currentProgress
                 }
               };
-              
-              console.log('[MEDICAL_UI] Document message structure:', {
-                type: documentsContent.type,
-                hasContent: !!documentsContent.content,
-                contentKeys: Object.keys(documentsContent.content),
-                articlesInContent: documentsContent.content.articles?.length,
-                fullContent: JSON.stringify(documentsContent, null, 2)
-              });
-              
-              console.log('Sending document message to handleSendMessage:', JSON.stringify(documentsContent, null, 2));
+
+
+
+
               await handleSendMessage(documentsContent);
-              console.log('Document message sent successfully');
+
 
               try {
-                console.log('Starting final analysis with processed articles:', processedArticles.length);
+
                 // Send the analysis loading state message
                 const loadingContent = {
                   type: 'analysis',
@@ -396,20 +336,20 @@ const handleExtract = async () => {
                   processedArticles,
                   detectedSpecialty?.specialtyId
                 );
-              
+
                 // Send the analysis as a separate message
                 const analysisContent = {
                   type: 'analysis',
                   content: finalAnalysis.markdown_content
                 };
-                
+
                 // Send the analysis message
-                console.log('Sending analysis message to handleSendMessage:', JSON.stringify(analysisContent, null, 2));
+
                 await handleSendMessage(analysisContent);
-                console.log('Analysis message sent successfully');
+
                 setCurrentProgress('Processing complete.');
               } catch (error) {
-                console.error('Error generating final analysis:', error);
+
                 setCurrentProgress('Error generating final analysis. Please try again.');
               }
             }
@@ -435,19 +375,19 @@ const handleExtract = async () => {
               drug_results: analysis.drug_results,
               point_breakdown: analysis.point_breakdown
             };
-            
+
             // Set current article being processed
             setCurrentArticleData(articleData);
-            
+
             // Add to both state and local variable
             setArticles(current => [...current, articleData]);
             processedArticles.push(articleData);
-            console.log('Added article to processed articles. Current count:', processedArticles.length);
+
 
             const articleNumber = data.data.progress?.article_number || 0;
             const totalArticles = data.data.progress?.total_articles || 0;
-            console.log('Progress:', { articleNumber, totalArticles, processedArticlesLength: processedArticles.length });
-            
+
+
             if (articleNumber > 0 && totalArticles > 0) {
               const progress = (articleNumber / totalArticles) * 100;
               setCurrentProgress(`Processed article ${articleNumber} out of ${totalArticles}`);
@@ -458,7 +398,7 @@ const handleExtract = async () => {
         weightOverrides
       );
     } catch (error) {
-      console.error('[RETRIEVE_DEBUG] Error:', error);
+
       setCurrentProgress('Error retrieving articles. Please try again.');
     } finally {
       setIsRetrieving(false);
@@ -478,24 +418,13 @@ useEffect(() => {
       !retrievalAttemptedRef.current &&
       shouldRetrieve &&
       weightsConfirmed) {
-    console.log('[RETRIEVAL_DEBUG] Conditions met for retrieval');
+
     retrievalAttemptedRef.current = true;
     handleRetrieve();
     setJustExtracted(false);
     setShouldRetrieve(false);
   } else if (justExtracted) {
-    console.log('[RETRIEVAL_DEBUG] Retrieval conditions not met:', {
-      justExtracted,
-      extractedDisease,
-      extractedEventsLength: extractedEvents.length,
-      isRetrieving,
-      isProcessingArticles,
-      hasDocumentMessages,
-      hasCaseNotesOrLabResults: !!(caseNotes || labResults),
-      retrievalAttempted: retrievalAttemptedRef.current,
-      shouldRetrieve,
-      weightsConfirmed
-    });
+
   }
 }, [justExtracted, extractedDisease, extractedEvents, isRetrieving, isProcessingArticles, hasDocumentMessages, isNewChat, caseNotes, labResults, shouldRetrieve, weightsConfirmed]);
 
@@ -517,7 +446,7 @@ useEffect(() => {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
-      <TopBar 
+      <TopBar
         user={user}
         firstName={firstName}
         handleLogin={handleLogin}
@@ -527,6 +456,8 @@ useEffect(() => {
         isAuthenticated={isAuthenticated}
       />
 
+      {submissionError && <p role="alert" className="fixed top-16 left-1/4 right-4 z-40 bg-red-50 p-3">{submissionError}</p>}
+      {localIntroduction && <p role="status" className="fixed top-20 left-1/4 right-4 z-30 bg-blue-50 p-3">{localIntroduction}</p>}
       {/* Feedback Button and Modal */}
       <FeedbackButton onClick={handleOpenFeedbackModal} />
       <FeedbackModal isOpen={showFeedbackModal} onClose={handleCloseFeedbackModal} />
@@ -598,7 +529,7 @@ useEffect(() => {
         />
         </div>
       </div>
-      
+
       <Footer />
     </div>
   );

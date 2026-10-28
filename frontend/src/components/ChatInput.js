@@ -15,8 +15,6 @@
 import React, { useRef, useEffect, useState, useCallback, memo } from 'react';
 import { Mic, MicOff, ArrowRight } from 'lucide-react';
 import LoadingSpinner from './LoadingSpinner';
-import { redactSensitiveInfo } from '../utils/api';
-import useDebounce from '../hooks/useDebounce';
 
 // Define the SpeechRecognition interface
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -25,70 +23,41 @@ const ChatInput = memo(({ message, setMessage, handleSendMessage, isLoading }) =
   const textareaRef = useRef(null);
   const recognitionRef = useRef(null);
   const cursorPositionRef = useRef(0);
-  
+
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState(null);
   const [interimTranscript, setInterimTranscript] = useState('');
   const [redactedInput, setRedactedInput] = useState('');
-  const [shouldDebounce, setShouldDebounce] = useState(true);
-  const [isRedacting, setIsRedacting] = useState(false);
-  console.log('message_clear_render: Initial redactedInput state:', redactedInput);
-  
-  const debouncedInput = useDebounce(redactedInput, 700);
+  const isRedacting = false;
+
+
+
 
   const handleClear = useCallback(() => {
-    console.log('message_clear_render: handleClear called');
-    console.log('message_clear_render: redactedInput before clear:', redactedInput);
-    console.log('message_clear_render: message before clear:', message);
+
+
+
     setRedactedInput('');
-    console.log('message_clear_render: Setting redactedInput to empty string');
+
     setMessage('');
-    console.log('message_clear_render: Setting message to empty string');
+
     if (textareaRef.current) {
-      console.log('message_clear_render: textarea value before clear:', textareaRef.current.value);
+
       textareaRef.current.value = '';
       textareaRef.current.style.height = 'auto';
-      console.log('message_clear_render: textarea value after clear:', textareaRef.current.value);
+
     }
     // Prevent debounce effect from running
-    setShouldDebounce(false);
-    console.log('message_clear_render: Disabled debounce effect');
-    console.log('message_clear_render: handleClear finished');
-  }, [setMessage, redactedInput, message]);
+
+
+
+  }, [setMessage]);
 
   useEffect(() => {
     if (textareaRef.current) {
       adjustTextareaHeight(textareaRef.current);
     }
   }, [redactedInput]);
-
-  useEffect(() => {
-    const handleRedaction = async () => {
-      if (shouldDebounce && debouncedInput.trim() && debouncedInput !== message) {
-        try {
-          setIsRedacting(true);
-          const redactedText = await redactSensitiveInfo(debouncedInput);
-          console.log('message_clear_render: Setting redactedInput to:', redactedText);
-          setRedactedInput(redactedText);
-          console.log('message_clear_render: Setting message to:', redactedText);
-          setMessage(redactedText);
-          
-          // Preserve cursor position
-          if (textareaRef.current) {
-            const currentPosition = textareaRef.current.selectionStart;
-            const diff = redactedText.length - debouncedInput.length;
-            cursorPositionRef.current = Math.max(0, currentPosition + diff);
-          }
-        } catch (error) {
-          console.error('Redaction failed:', error);
-        } finally {
-          setIsRedacting(false);
-        }
-      }
-    };
-
-    handleRedaction();
-  }, [debouncedInput, setMessage, message, shouldDebounce]);
 
   // Separate effect for setting cursor position
   useEffect(() => {
@@ -98,7 +67,7 @@ const ChatInput = memo(({ message, setMessage, handleSendMessage, isLoading }) =
   }, [redactedInput]);
 
   useEffect(() => {
-    console.log('message_clear_render: Setting redactedInput to message:', message);
+
     setRedactedInput(message);
   }, [message]);
 
@@ -123,7 +92,7 @@ const ChatInput = memo(({ message, setMessage, handleSendMessage, isLoading }) =
         if (finalTranscript) {
           setMessage(prevMessage => {
             const newMessage = (prevMessage + ' ' + finalTranscript).trim();
-            console.log('message_clear_render: Setting message from speech recognition:', newMessage);
+
             return newMessage;
           });
         }
@@ -148,23 +117,23 @@ const ChatInput = memo(({ message, setMessage, handleSendMessage, isLoading }) =
         recognitionRef.current.abort();
       }
     };
-  }, []);
+  }, [setMessage]);
 
 const handleSubmit = useCallback((e) => {
   if (e) e.preventDefault();
-  console.log('message_clear_render: handleSubmit called');
-  console.log('message_clear_render: redactedInput:', redactedInput);
-  console.log('message_clear_render: isLoading:', isLoading);
-  console.log('message_clear_render: isListening:', isListening);
+
+
+
+
   if (redactedInput.trim() && !isLoading && !isListening) {
-    console.log('message_clear_render: Calling handleSendMessage');
-    handleSendMessage(redactedInput.trim());
-    console.log('message_clear_render: Calling handleClear');
+
+    handleSendMessage({content:redactedInput.trim()});
+
     handleClear();
   } else {
-    console.log('message_clear_render: Conditions not met for sending message');
+
   }
-  console.log('message_clear_render: handleSubmit finished');
+
 }, [redactedInput, isLoading, isListening, handleSendMessage, handleClear]);
 
   const handleTextareaKeyDown = useCallback((e) => {
@@ -176,7 +145,7 @@ const handleSubmit = useCallback((e) => {
 
   const handleButtonClick = useCallback((e) => {
     e.preventDefault(); // Prevent form submission
-    
+
     if (isListening) {
       // Stop recording
       recognitionRef.current.stop();
@@ -189,7 +158,7 @@ const handleSubmit = useCallback((e) => {
         recognitionRef.current.start();
         setIsListening(true);
       } catch (error) {
-        setError(`Failed to start recognition: ${error.message}`);
+        setError(`Speech recognition could not be started.`);
         setIsListening(false);
       }
     } else {
@@ -213,10 +182,10 @@ const handleSubmit = useCallback((e) => {
   const handleTextareaChange = useCallback((e) => {
     const newText = e.target.value;
     if (!isListening) {
-      console.log('message_clear_render: Setting redactedInput in handleTextareaChange:', newText);
+
       setRedactedInput(newText);
       cursorPositionRef.current = e.target.selectionStart;
-      setShouldDebounce(true);
+
     }
     adjustTextareaHeight(textareaRef.current);
   }, [isListening]);
@@ -246,7 +215,7 @@ const handleSubmit = useCallback((e) => {
             disabled={isLoading}
             style={{ minHeight: '3em', maxHeight: '35vh' }}
           />
-          {console.log('message_clear_render: Textarea rendered with value:', redactedInput + (isListening ? ' ' + interimTranscript : ''))}
+          {}
           <button
             onClick={handleButtonClick}
             disabled={isLoading}

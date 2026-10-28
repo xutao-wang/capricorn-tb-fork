@@ -17,7 +17,7 @@ import React from 'react';
 import UserMenu from './UserMenu';
 
 const Header = ({ user, firstName, handleLogin, handleLogout, showUserMenu, setShowUserMenu, isAuthenticated }) => {
-  console.log('[USER_MENU_DEBUG] Header: Rendering, isAuthenticated:', isAuthenticated, 'showUserMenu:', showUserMenu, 'user:', user);
+
 
   const isAnonymous = user && user.isAnonymous;
   const showLoginButton = !isAuthenticated || isAnonymous;
@@ -29,7 +29,7 @@ const Header = ({ user, firstName, handleLogin, handleLogout, showUserMenu, setS
           <div className="relative z-20">
             <button
               onClick={() => {
-                console.log('[USER_MENU_DEBUG] Header: Login button clicked');
+
                 handleLogin();
               }}
               className="mr-4 px-4 py-2 text-white hover:text-blue-100 transition-colors"
@@ -38,7 +38,7 @@ const Header = ({ user, firstName, handleLogin, handleLogout, showUserMenu, setS
             </button>
           </div>
         ) : (
-          <UserMenu 
+          <UserMenu
             user={user}
             firstName={firstName}
             handleLogout={handleLogout}
