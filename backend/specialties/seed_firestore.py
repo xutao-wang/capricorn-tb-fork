@@ -8,6 +8,7 @@ import json
 import os
 
 from google.cloud import firestore
+from google.api_core.exceptions import AlreadyExists
 
 
 def main():
@@ -26,8 +27,11 @@ def main():
             specialty = json.load(f)
 
         specialty_id = specialty['id']
-        db.collection('specialties').document(specialty_id).set(specialty)
-        print(f"Seeded specialties/{specialty_id} from {filename}")
+        try:
+            db.collection('specialties').document(specialty_id).create(specialty)
+            print(f"Seeded specialties/{specialty_id} from {filename}")
+        except AlreadyExists:
+            print(f"Preserved existing specialties/{specialty_id}")
 
 
 if __name__ == '__main__':

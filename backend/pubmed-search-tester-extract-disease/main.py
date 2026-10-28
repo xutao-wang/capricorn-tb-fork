@@ -4,6 +4,9 @@ from google import genai
 from google.genai import types
 import logging
 import os
+from capricorn_runtime import config as runtime
+from capricorn_runtime.security import protected_http
+from capricorn_runtime.clinical import disease_result, ExtractionValidationError
 
 from specialty import get_specialty, build_disease_extraction_prompt
 
@@ -14,11 +17,12 @@ logger = logging.getLogger(__name__)
 # Initialize Vertex AI client
 client = genai.Client(
     vertexai=True,
-    project=os.environ.get('PROJECT_ID'),
+    project=runtime.project_id(),
     location=os.environ.get('LOCATION'),
 )
 
 @functions_framework.http
+@protected_http
 def extract_disease(request):
     # Enable CORS
     if request.method == 'OPTIONS':
@@ -56,12 +60,12 @@ def extract_disease(request):
         # Configure Gemini model. Extraction is pure reading comprehension of the
         # case notes — no external lookup needed — so no Google Search grounding.
         # flash-lite is fast and fully sufficient for this task.
-        model = "gemini-3.1-flash-lite"
+        model = runtime.model_name("gemini-3.1-flash-lite")
         generate_content_config = types.GenerateContentConfig(
             temperature=1,
             top_p=0.95,
             candidate_count=1,
-            max_output_tokens=8192,
+            max_output_tokens=runtime.output_token_limit(8192),
             response_modalities=["TEXT"],
             safety_settings=[
                 types.SafetySetting(
@@ -90,11 +94,13 @@ def extract_disease(request):
             config=generate_content_config,
         )
 
-        return (response.text, 200, headers)
+        return (disease_result(response.text), 200, headers)
 
+    except ExtractionValidationError as e:
+        return jsonify({'error': str(e), 'code': e.code}), 422, headers
     except Exception as e:
-        logger.error(f"Error processing request: {str(e)}")
-        return (jsonify({"error": str(e)}), 500, headers)
+        logger.error(f"Error processing request: {type(e).__name__}")
+        return (jsonify({"error": "The request could not be completed"}), 500, headers)
 
 if __name__ == "__main__":
     # This is used when running locally only. When deploying to Google Cloud Functions,

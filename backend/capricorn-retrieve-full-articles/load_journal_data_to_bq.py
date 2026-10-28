@@ -50,16 +50,8 @@ def create_bigquery_table(project_id, dataset_id, table_id):
     table_ref = f"{project_id}.{dataset_id}.{table_id}"
     table = bigquery.Table(table_ref, schema=schema)
     
-    # Delete table if it exists
-    try:
-        client.delete_table(table_ref)
-        print(f"Deleted existing table {table_ref}")
-    except Exception:
-        pass
-    
-    # Create new table
-    table = client.create_table(table)
-    print(f"Created table {table_ref}")
+    table = client.create_table(table, exists_ok=True)
+    print(f"Ensured table {table_ref}; existing data is preserved")
     
     return table_ref
 
@@ -76,7 +68,7 @@ def load_data_to_bigquery(project_id, dataset_id, table_id, journals_data):
             bigquery.SchemaField("title", "STRING", mode="REQUIRED"),
             bigquery.SchemaField("sjr", "FLOAT64", mode="REQUIRED"),
         ],
-        write_disposition="WRITE_TRUNCATE",  # Overwrite table data
+        write_disposition="WRITE_EMPTY",  # Refuse to overwrite populated tables
     )
     
     # Load data

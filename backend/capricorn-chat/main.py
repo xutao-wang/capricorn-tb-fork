@@ -20,18 +20,20 @@ from google import genai
 from google.cloud import firestore
 import json
 import os
+from capricorn_runtime import config as runtime
+from capricorn_runtime.security import protected_http
 
 from specialty import get_specialty
 
 # Initialize Firestore client with environment variable
-db = firestore.Client(database=os.environ.get('DATABASE_ID', 'capricorn-eu'))
+db = firestore.Client(project=runtime.project_id(), database=runtime.database_id())
 
 from google.genai import types
 
 # Initialize Gemini client with environment variables
 client = genai.Client(
     vertexai=True,
-    project=os.environ.get('PROJECT_ID', 'gemini-med-lit-review'),
+    project=runtime.project_id(),
     location=os.environ.get('LOCATION', 'us-central1'),
 )
 
@@ -86,6 +88,7 @@ Remember:
 The conversation will include full article texts and analysis - use this information to provide detailed, evidence-based responses."""
 
 @functions_framework.http
+@protected_http
 def chat(request):
     """HTTP Cloud Function for chat interactions."""
     # Set CORS headers for preflight requests
@@ -160,7 +163,7 @@ def chat(request):
         generate_content_config = types.GenerateContentConfig(
             temperature=1,
             top_p=0.95,
-            max_output_tokens=8192,
+            max_output_tokens=runtime.output_token_limit(8192),
             response_modalities=["TEXT"],
             safety_settings=[
                 types.SafetySetting(
@@ -186,7 +189,7 @@ def chat(request):
         def generate():
             try:
                 response = client.models.generate_content_stream(
-                    model="gemini-2.5-pro",
+                    model=runtime.model_name("gemini-2.5-pro"),
                     contents=contents,
                     config=generate_content_config
                 )
@@ -196,7 +199,7 @@ def chat(request):
                         yield f"data: {json.dumps({'text': chunk.text})}\n\n"
                         
             except Exception as e:
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                yield f"data: {json.dumps({'error': 'The request could not be completed'})}\n\n"
             
             yield "data: [DONE]\n\n"
 
@@ -211,4 +214,4 @@ def chat(request):
         )
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500, headers
+        return jsonify({'error': 'The request could not be completed'}), 500, headers

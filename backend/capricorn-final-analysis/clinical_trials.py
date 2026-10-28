@@ -17,6 +17,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from google.genai import types
+from capricorn_runtime import config as runtime
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ def _ctgov_request(params):
             data = json.loads(resp.read().decode('utf-8'))
         return data.get('studies', [])
     except Exception as e:
-        logger.error(f"ClinicalTrials.gov request failed for {params}: {e}")
+        logger.error("ClinicalTrials.gov request failed: %s", type(e).__name__)
         return []
 
 
@@ -209,7 +210,7 @@ def screen_trials_for_event(case_notes, disease, event, trials, client):
     config = types.GenerateContentConfig(
         temperature=0.2,
         top_p=0.95,
-        max_output_tokens=4096,
+        max_output_tokens=runtime.output_token_limit(4096),
         safety_settings=[
             types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
             types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
@@ -226,7 +227,7 @@ def screen_trials_for_event(case_notes, disease, event, trials, client):
         )
         verdicts = _extract_json_array(response.text)
     except Exception as e:
-        logger.error(f"Trial screening failed for event '{event}': {e}")
+        logger.error("Trial screening failed: %s", type(e).__name__)
         return []
 
     # Attach the trial's own metadata (title/phase/status) back onto each
@@ -251,7 +252,7 @@ def screen_all_events(case_notes, disease, events, specialty, client):
     try:
         candidates_by_event = fetch_candidate_trials(disease, events, specialty)
     except Exception as e:
-        logger.error(f"fetch_candidate_trials failed entirely: {e}")
+        logger.error("Candidate trial fetch failed: %s", type(e).__name__)
         return {}
 
     results = {}
@@ -265,7 +266,7 @@ def screen_all_events(case_notes, disease, events, specialty, client):
             try:
                 results[event] = future.result()
             except Exception as e:
-                logger.error(f"Screening future failed for event '{event}': {e}")
+                logger.error("Screening future failed: %s", type(e).__name__)
                 results[event] = []
 
     return results

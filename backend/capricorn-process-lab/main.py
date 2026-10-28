@@ -20,12 +20,15 @@ import base64
 import json
 import logging
 import os
+from capricorn_runtime import config as runtime
+from capricorn_runtime.security import protected_http
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 @functions_framework.http
+@protected_http
 def process_lab(request):
     """HTTP Cloud Function to process a PDF lab report and extract genomic information."""
     # Handle CORS preflight requests
@@ -55,13 +58,13 @@ def process_lab(request):
         try:
             pdf_bytes = base64.b64decode(pdf_base64)
         except Exception as e:
-            logger.error(f"Invalid base64 data: {e}")
-            return jsonify({'error': f'Invalid base64 data: {e}'}), 400, headers
+            logger.error("Invalid base64 data: %s", type(e).__name__)
+            return jsonify({'error': 'Invalid base64 data'}), 400, headers
 
         # Initialize GenAI Client with environment variables
         client = genai.Client(
             vertexai=True,
-            project=os.environ.get('PROJECT_ID', 'gemini-med-lit-review'),
+            project=runtime.project_id(),
             location=os.environ.get('LOCATION', 'global'),
         )
 
@@ -135,7 +138,7 @@ CHROMOSOME LEVEL ABERRATIONS
 - Chromosome/Arm: 7, Change: gain, DCR: ~1.5-1.7, Rationale: Consistent visual increase along the entire chromosome
 - Chromosome/Arm: 18, Change: gain, DCR: ~1.5-1.7, Rationale: Consistent visual increase along the entire chromosome""")
 
-        model = "gemini-2.5-flash"
+        model = runtime.model_name("gemini-2.5-flash")
         contents = [
             types.Content(
                 role="user",
@@ -147,7 +150,7 @@ CHROMOSOME LEVEL ABERRATIONS
             temperature=1,
             top_p=1,
             seed=0,
-            max_output_tokens=65535,
+            max_output_tokens=runtime.output_token_limit(65535),
             safety_settings=[
                 types.SafetySetting(
                     category="HARM_CATEGORY_HATE_SPEECH",
@@ -189,8 +192,8 @@ CHROMOSOME LEVEL ABERRATIONS
         }), 200, headers
 
     except Exception as e:
-        logger.error(f"Error in process_lab: {str(e)}", exc_info=True)
-        return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500, headers
+        logger.error(f"Error in process_lab: {type(e).__name__}")
+        return jsonify({'error': f'An unexpected error occurred: {type(e).__name__}'}), 500, headers
 
 if __name__ == "__main__":
     app = functions_framework.create_app(target="process_lab")

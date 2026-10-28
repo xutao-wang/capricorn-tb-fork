@@ -54,14 +54,8 @@ def create_bigquery_table(project_id, dataset_id, table_id):
     table_ref = f"{project_id}.{dataset_id}.{table_id}"
     table = bigquery.Table(table_ref, schema=schema)
 
-    try:
-        client.delete_table(table_ref)
-        print(f"Deleted existing table {table_ref}")
-    except Exception:
-        pass
-
-    table = client.create_table(table)
-    print(f"Created table {table_ref}")
+    table = client.create_table(table, exists_ok=True)
+    print(f"Ensured table {table_ref}; existing data is preserved")
 
     return table_ref
 
@@ -78,7 +72,7 @@ def load_data_to_bigquery(project_id, dataset_id, table_id, citation_data):
             bigquery.SchemaField("citation_count", "INT64", mode="REQUIRED"),
             bigquery.SchemaField("relative_citation_ratio", "FLOAT64", mode="REQUIRED"),
         ],
-        write_disposition="WRITE_TRUNCATE",
+        write_disposition="WRITE_EMPTY",
     )
 
     job = client.load_table_from_json(citation_data, table_ref, job_config=job_config)

@@ -5,6 +5,7 @@ into an otherwise fully generic prompt. See docs/persona-system-plan.md
 at the repo root.
 """
 import os
+from capricorn_runtime import config as runtime
 
 from google.cloud import firestore
 
@@ -15,8 +16,8 @@ def get_specialty(specialty_id=None):
     specialty_id = specialty_id or DEFAULT_SPECIALTY_ID
 
     db = firestore.Client(
-        project=os.environ.get('PROJECT_ID'),
-        database=os.environ.get('DATABASE_ID', '(default)'),
+        project=runtime.project_id(),
+        database=runtime.database_id(),
     )
     doc = db.collection('specialties').document(specialty_id).get()
     if not doc.exists:

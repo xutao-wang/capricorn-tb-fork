@@ -7,9 +7,11 @@ detection is choosing among all of them. See docs/auto-specialty-detection-plan.
 and docs/persona-generation-plan.md at the repo root for the full design.
 """
 import os
+from capricorn_runtime import config as runtime
 import re
 
 from google.cloud import firestore
+from google.api_core.exceptions import AlreadyExists
 
 DEFAULT_SPECIALTY_ID = "general-medicine"
 CONFIDENCE_THRESHOLD = 65
@@ -33,8 +35,8 @@ REQUIRED_ARTICLE_SCORING_FIELDS = [
 
 def _db():
     return firestore.Client(
-        project=os.environ.get('PROJECT_ID'),
-        database=os.environ.get('DATABASE_ID', '(default)'),
+        project=runtime.project_id(),
+        database=runtime.database_id(),
     )
 
 
@@ -61,10 +63,13 @@ Patient case notes:
 {case_text}
 \"\"\"
 
-Task: Choose the single best-matching specialty id from the list above, and rate your confidence (0-100) that it's a genuinely good fit -- not just the least-bad option. If none of the available specialties are a good fit for this case's disease/organ system, set specialtyId to null and instead suggest a new specialty via suggestedLabel/suggestedDescription (a short label like "Hepatology" and a one-sentence description of what it covers, in the same style as the descriptions above). Do not choose "{DEFAULT_SPECIALTY_ID}" out of caution if a more specific new specialty would genuinely fit better -- only fall back to null/suggestion when the case doesn't fit any existing option well.
+First decide whether these notes actually describe a clinical patient case or reviewed medical findings. General questions, greetings, app questions, empty requests and unrelated text are not clinical cases. Set isClinicalCase=false for those inputs, leave specialtyId and suggestions null, and do not invent a medical specialty. Preserve suspected diagnoses as suspected.
+
+Task: For a clinical case, choose the single best-matching specialty id from the list above, and rate your confidence (0-100) that it's a genuinely good fit -- not just the least-bad option. If none of the available specialties are a good fit for this case's disease/organ system, set specialtyId to null and instead suggest a new specialty via suggestedLabel/suggestedDescription (a short label like "Hepatology" and a one-sentence description of what it covers, in the same style as the descriptions above). Do not choose "{DEFAULT_SPECIALTY_ID}" out of caution if a more specific new specialty would genuinely fit better -- only fall back to null/suggestion when the case doesn't fit any existing option well.
 
 Return ONLY a raw JSON object with this exact structure. Do not include any explanatory text, markdown formatting, or code blocks. The response should start with '{{' and end with '}}' with no other characters before or after.
 {{
+  "isClinicalCase": true or false,
   "specialtyId": "..." or null,
   "confidence": 0-100,
   "rationale": "One sentence explaining the choice.",
@@ -135,8 +140,8 @@ def validate_specialty_config(config):
     if not isinstance(fields, list) or not fields:
         return False, "articleScoring.fields must be a non-empty list"
     for f in fields:
-        if not all(k in f for k in ('key', 'label', 'points', 'description')):
-            return False, f"Malformed field entry in articleScoring.fields: {f}"
+        if not isinstance(f, dict) or not all(k in f for k in ('key', 'label', 'points', 'description')):
+            return False, "Malformed field entry in articleScoring.fields"
 
     return True, None
 
@@ -169,5 +174,9 @@ def save_generated_specialty(config, source_case_excerpt):
     config['createdAt'] = firestore.SERVER_TIMESTAMP
 
     db = _db()
-    db.collection('specialties').document(config['id']).set(config)
+    try:
+        db.collection('specialties').document(config['id']).create(config)
+    except AlreadyExists:
+        # The collection snapshot may predate a concurrent approved UI write.
+        return None
     return config

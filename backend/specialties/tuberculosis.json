@@ -3,13 +3,13 @@
   "label": "Tuberculosis & Infectious Disease",
   "description": "Pulmonary and extrapulmonary tuberculosis, drug-resistant TB (MDR-TB, XDR-TB, RR-TB), mycobacterial infections, and chest imaging phenotypes including cavitation, consolidation, and miliary patterns.",
   "personaTitle": "infectious disease specialist and clinical mycobacteriologist",
-  "boardName": "Consortium on Tuberculosis Research & Clinical Management",
+  "boardName": null,
   "diseaseExtraction": {
-    "guidance": null,
+    "guidance": "Preserve explicitly stated suspected versus confirmed disease. Do not diagnose TB from imaging alone or infer multidrug resistance from rifampicin resistance alone; require supplied evidence of both rifampicin and isoniazid resistance for established MDR-TB.",
     "fewShotExamples": [
       {
         "input": "38-year-old male with persistent cough, night sweats, right upper lobe cavitary lesion on CXR, sputum GeneXpert positive for MTB with rifampicin resistance detected (rpoB S531L mutation)...",
-        "output": "Multidrug-resistant pulmonary tuberculosis (MDR-TB)"
+        "output": "Rifampicin-resistant pulmonary tuberculosis (RR-TB)"
       },
       {
         "input": "24-year-old female presenting with 3-week history of fever, weight loss, bilateral apical infiltrates on chest radiograph, AFB smear 3+, culture pending...",
@@ -47,14 +47,14 @@
     ],
     "postCategoryNotes": [
       "Focus on radiological phenotypes, drug susceptibility profiles, and molecular markers that directly impact regimen selection (e.g. BPaL, BPaLM, individualized MDR-TB regimens, surgical resection indications).",
-      "CRITICAL: When reporting drug resistance, specify the drug name and mechanism or mutation whenever mentioned (e.g., \"Rifampicin resistance (rpoB S531L)\" rather than just \"resistant\")."
+      "CRITICAL: When reporting drug resistance, specify the drug name and mechanism or mutation whenever mentioned (e.g., \"Rifampicin resistance (rpoB S531L)\" rather than just \"resistant\").",
+      "Keep reviewed image observations separate from clinical or laboratory facts. Do not infer diagnosis, bacillary burden, infectiousness, drug resistance or treatment decisions from imaging alone."
     ],
     "fewShotExample": {
       "caseNoteInput": "42-year-old male with persistent cough, fever, and 8 kg weight loss. Chest X-ray demonstrates extensive right upper lobe cavitation with surrounding consolidations and left apical tree-in-bud opacities. Sputum AFB smear is 3+ positive. Molecular testing via GeneXpert MTB/RIF detects Mycobacterium tuberculosis with rpoB S531L mutation indicating rifampicin resistance. Second-line Line Probe Assay confirms gyrA wild-type (fluoroquinolone susceptible). Patient has comorbid type 2 diabetes mellitus.",
       "expectedOutput": "\"Right upper lobe cavitation\" \"Surrounding consolidations\" \"Left apical tree-in-bud opacities\" \"AFB smear positive 3+\" \"GeneXpert MTB/RIF detected\" \"Rifampicin resistance (rpoB S531L)\" \"Fluoroquinolone susceptible (gyrA wild-type)\" \"Type 2 diabetes mellitus\""
     },
     "guidanceNotes": [
-      "**Actionable Radiological Phenotypes:** Radiographic cavitation and bilateral extent signify high bacterial burden, increased risk of treatment failure, and delayed sputum conversion, guiding regimen duration and therapeutic monitoring.",
       "**Precision in Resistance Profiling:** Explicitly differentiating rifampicin monoresistance, MDR-TB, and fluoroquinolone resistance is vital to matching WHO-recommended shortened all-oral regimens (e.g., BPaL/BPaLM).",
       "**Specific Search Terms:** Exact phenotype phrases such as \"cavitary pulmonary tuberculosis\" or \"rifampicin-resistant tuberculosis\" allow Capricorn vector search to target high-impact therapeutic literature.",
       "**Multimodal Synthesis:** Combining imaging features with microbiology provides a comprehensive clinical picture for evidence-based regimen design."

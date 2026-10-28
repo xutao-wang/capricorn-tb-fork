@@ -12,103 +12,48 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from html import escape
 import os
-import json
-import logging
-from flask import jsonify, request
-from flask_cors import cross_origin
+
+import functions_framework
+from flask import jsonify
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, To
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from capricorn_runtime.security import protected_http
 
-# Define team recipients
-TEAM_RECIPIENTS = [
-    'williszhang@google.com',
-    'U.ilan-2@prinsesmaximacentrum.nl'
-]
 
+@functions_framework.http
+@protected_http
 def send_feedback_email(request):
-    """
-    Cloud Function to send feedback emails using SendGrid.
-    
-    Args:
-        request (flask.Request): The request object.
-        
-    Returns:
-        The response text, or any set of values that can be turned into a
-        Response object using `make_response`.
-    """
-    # Set CORS headers for preflight requests
-    if request.method == 'OPTIONS':
-        # Allows POST requests from any origin with the Content-Type
-        # header and caches preflight response for 3600s
-        headers = {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST',
-            'Access-Control-Allow-Headers': 'Content-Type',
-            'Access-Control-Max-Age': '3600'
-        }
-        return ('', 204, headers)
-    
-    # Set CORS headers for the main request
-    headers = {
-        'Access-Control-Allow-Origin': '*'
-    }
-    
+    """Send only to operator-configured recipients after explicit enablement."""
+    sender = os.environ.get('FEEDBACK_FROM_EMAIL', '')
+    recipients = [value.strip() for value in os.environ.get('FEEDBACK_TO_EMAILS', '').split(',')
+                  if value.strip()]
+    api_key = os.environ.get('SENDGRID_API_KEY')
+    if (os.environ.get('FEEDBACK_ENABLED', 'false').lower() != 'true'
+            or not sender or not recipients or not api_key):
+        return jsonify({'error': 'Feedback email is not configured'}), 503
+
+    payload = request.get_json()
+    feedback = payload.get('feedback')
+    name = payload.get('name', 'Capricorn user')
+    email = payload.get('email', '')
+    if (not isinstance(feedback, str) or not feedback.strip() or len(feedback) > 5000
+            or not isinstance(name, str) or len(name) > 200
+            or not isinstance(email, str) or len(email) > 320):
+        return jsonify({'error': 'Valid feedback text is required'}), 400
+    message = Mail(
+        from_email=sender,
+        to_emails=[To(email=recipient) for recipient in recipients],
+        subject='Capricorn Medical Research App Feedback',
+        html_content=(f'<p>From: {escape(name)}</p><p>Email: {escape(email)}</p>'
+                      f'<p>{escape(feedback)}</p>'),
+    )
     try:
-        # Get request data
-        request_json = request.get_json(silent=True)
-        
-        if not request_json:
-            logger.error("No JSON data in request")
-            return (jsonify({'success': False, 'error': 'No data provided'}), 400, headers)
-        
-        # Extract feedback data
-        name = request_json.get('name', 'Anonymous User')
-        email = request_json.get('email', 'No email provided')
-        feedback_text = request_json.get('feedback')
-        
-        if not feedback_text:
-            logger.error("No feedback text provided")
-            return (jsonify({'success': False, 'error': 'No feedback text provided'}), 400, headers)
-        
-        # Get SendGrid API key from environment variable
-        api_key = os.environ.get('SENDGRID_API_KEY')
-        if not api_key:
-            logger.error("SendGrid API key not found")
-            return (jsonify({'success': False, 'error': 'Email service configuration error'}), 500, headers)
-        
-        # Create recipients list - include sender if they provided a valid email
-        recipients = TEAM_RECIPIENTS.copy()
-        if email and email != 'No email provided' and '@' in email:
-            recipients.append(email)
-        
-        # Create email message
-        message = Mail(
-            from_email='williszhang@williszhang.com',
-            to_emails=[To(email=recipient) for recipient in recipients],
-            subject='Capricorn Medical Research App Feedback',
-            html_content=f"""
-            <h2>New Feedback Received</h2>
-            <p><strong>From:</strong> {name}</p>
-            <p><strong>Email:</strong> {email}</p>
-            <p><strong>Feedback:</strong></p>
-            <p>{feedback_text}</p>
-            <p>Thank you for helping us improve the Capricorn Medical Research App.</p>
-            """
-        )
-        
-        # Send email
-        sg = SendGridAPIClient(api_key)
-        response = sg.send(message)
-        
-        logger.info(f"Email sent with status code: {response.status_code}")
-        
-        return (jsonify({'success': True}), 200, headers)
-        
-    except Exception as e:
-        logger.error(f"Error sending email: {str(e)}")
-        return (jsonify({'success': False, 'error': str(e)}), 500, headers)
+        response = SendGridAPIClient(api_key).send(message)
+        if not 200 <= response.status_code < 300:
+            return jsonify({'error': 'Feedback delivery failed'}), 502
+        return jsonify({'success': True}), 200
+    except Exception:
+        return jsonify({'error': 'Feedback delivery failed'}), 502
