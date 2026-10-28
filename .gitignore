@@ -69,3 +69,11 @@ test-debug/
 *.swp
 *.swo
 function-urls.txt
+
+# Reviewed local staging and actual environment configuration
+.deploy/
+deploy/config.local.toml
+!frontend/firebase.json
+!frontend/package.json
+!frontend/package-lock.json
+!deploy/tests/*.json

@@ -1,0 +1,30 @@
+# Build proposals derived from project/region: capricorn-dev-build service account,
+# regional capricorn-functions Docker repo, private capricorn-src-PROJECT bucket.
+# Upgrade review configuration. Cloud apply/additional budget require final approval.
+project_id = "njms-tb-image-study"
+deployer_account = "xw488@gcp.rutgers.edu"
+hosting_site = "capricorn-njms-tb-image-study"
+region = "us-central1"
+gemini_location = "global"
+bigquery_location = "US"
+database_id = "capricorn-dev"
+model_dataset = "capricorn_model"
+journal_dataset = "capricorn_journal_rank"
+citation_dataset = "capricorn_citation_data"
+pubmed_table = "bigquery-public-data.pmc_open_access_commercial.articles"
+connection_id = "capricorn_vertex"
+allowed_emails = ["xw488@gcp.rutgers.edu"]
+allowed_origins = ["http://localhost:3000", "https://capricorn-njms-tb-image-study.web.app", "https://capricorn-njms-tb-image-study.firebaseapp.com"]
+# Separate enabled clinical-trial screening caller; explicit proposal, not approval.
+clinical_trials_model = "gemini-3.1-flash-lite"
+[models]
+capricorn-chat = "gemini-3.8-flash"
+capricorn-redact-sensitive-info = "gemini-3.1-flash-lite"
+capricorn-process-lab = "gemini-3.8-flash"
+capricorn-retrieve-full-articles = "gemini-3.8-flash"
+capricorn-final-analysis = "gemini-3.1-pro-preview"
+capricorn-feedback = "gemini-3.1-flash-lite"
+pubmed-search-tester-extract-disease = "gemini-3.1-flash-lite"
+pubmed-search-tester-extract-events = "gemini-3.1-flash-lite"
+capricorn-detect-specialty = "gemini-3.1-flash-lite"
+capricorn-analyze-image = "gemini-3.8-flash"
