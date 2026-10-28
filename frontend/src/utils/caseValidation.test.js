@@ -14,3 +14,57 @@ test.each([false, undefined])('nonclinical or missing classification prevents ex
 test('uses returned redacted variables and validates extraction before returning a case', async () => { const api=services(); const result=await prepareClinicalCase('synthetic case','synthetic lab',api); expect(result.caseNotes).toBe('safe synthetic case'); expect(api.extractDisease.mock.calls[0][0]).toContain('safe synthetic lab'); api.extractEvents.mockResolvedValue('No actionable events found'); await expect(prepareClinicalCase('synthetic case','',api)).rejects.toThrow(); });
 test.each([{success:false,events:['cavitation']},{success:false,data:{events:['cavitation']}},'The input "who are you?" does not describe clinical events','No events found: "cavitation"'])('rejects failure envelopes and prose around quoted terms %#',value=>expect(()=>normalizeEvents(value)).toThrow());
 test('rejects failed typed disease even when a disease field is present',()=>expect(()=>normalizeDisease({success:false,disease:'Tuberculosis'})).toThrow());
+
+describe('review regressions: clinical response semantics', () => {
+  test.each([
+    { isClinicalCase: false, disease: 'Tuberculosis' },
+    { data: { isClinicalCase: false, disease: 'Tuberculosis' } },
+    { data: { success: false, disease: 'Tuberculosis' } },
+    { data: { error: 'synthetic failure', disease: 'Tuberculosis' } },
+    { success: null, disease: 'Tuberculosis' },
+    'No diagnosis',
+    '"No diagnosis"',
+    "'No diagnosis'",
+    'No condition identified',
+    'not applicable',
+    'null',
+    'The provided text does not describe a clinical case',
+    '{"disease":"Tuberculosis"',
+    '"Tuberculosis" trailing prose',
+  ])('rejects nonclinical or incomplete disease representation %#', value => {
+    expect(() => normalizeDisease(value)).toThrow();
+  });
+
+  test.each([
+    { isClinicalCase: false, events: ['cavitation'] },
+    { data: { isClinicalCase: false, events: ['cavitation'] } },
+    { data: { success: false, events: ['cavitation'] } },
+    { data: { error: 'synthetic failure', events: ['cavitation'] } },
+    { success: null, events: ['cavitation'] },
+    { events: ['No diagnosis'] },
+    { events: ['not applicable'] },
+    { events: ['null'] },
+    { events: ['No findings'] },
+    '["cavitation"',
+    '"cavitation" trailing prose',
+    'The input "cavitation" does not describe clinical events',
+    '"cavitation",',
+  ])('rejects nonclinical or incomplete event representation %#', value => {
+    expect(() => normalizeEvents(value)).toThrow();
+  });
+
+  test('preserves medically meaningful punctuation in typed and legacy terms', () => {
+    expect(normalizeDisease({ disease: 'C. difficile infection' })).toBe('C. difficile infection');
+    expect(normalizeDisease('"C. difficile infection"')).toBe('C. difficile infection');
+    expect(normalizeDisease('Carcinoma of unknown primary')).toBe('Carcinoma of unknown primary');
+    expect(normalizeEvents({ events: ['BRAF p.V600E', 'PD-L1 TPS 50%'] })).toEqual([
+      'BRAF p.V600E', 'PD-L1 TPS 50%',
+    ]);
+    expect(normalizeEvents('"BRAF p.V600E"\n"PD-L1 TPS 50%"')).toEqual([
+      'BRAF p.V600E', 'PD-L1 TPS 50%',
+    ]);
+    expect(normalizeEvents('["BRAF p.V600E","PD-L1 TPS 50%"]')).toEqual([
+      'BRAF p.V600E', 'PD-L1 TPS 50%',
+    ]);
+  });
+});
