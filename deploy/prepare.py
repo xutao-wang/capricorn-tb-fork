@@ -183,7 +183,7 @@ def generate(c, output, replace=False):
             'build_identity':build_identity, 'source_bucket':source_bucket, 'artifact_repository':repository,
             'model_status':'Local design approved; cloud apply and additional budget pending',
             'hosting_site':c['hosting_site'], 'deployer_account':c['deployer_account'],
-            'models':c['models'], 'clinical_trials_model':c['clinical_trials_model'], 'frontend_blockers':['New image function URL pending deployment', 'Actual env-configured release build required'],
+            'models':c['models'], 'clinical_trials_model':c['clinical_trials_model'], 'frontend_blockers':['New image function URL pending deployment', 'Post-deployment image URL configuration and image-enabled release build required'],
             'frontend_url_keys':['REACT_APP_'+key+'_URL' for key in ['CHAT','REDACT','PROCESS_LAB','RETRIEVE_ARTICLES','FINAL_ANALYSIS','FEEDBACK','EXTRACT_DISEASE','EXTRACT_EVENTS','DETECT_SPECIALTY','ANALYZE_IMAGE']],
             'default_articles':1, 'maximum_articles':1})
         (stage / 'REVIEW-PLAN.md').write_text(resource_plan(c, identities, commands))

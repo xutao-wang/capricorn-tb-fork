@@ -2,6 +2,8 @@
 
 Prepared locally for `njms-tb-image-study` (`1077389854176`), deployer `xw488@gcp.rutgers.edu`, October 28, 2026. **Apply and additional spending are pending user approval.** No TB-phase cloud mutation, model request or paid BigQuery query has occurred.
 
+Read-only readiness checks confirm all nine existing functions are ACTIVE, the image runtime account and TB document are absent, the approved deployer already has project Owner, and the existing verifier role contains only `firebaseauth.users.get`. The current Hosting release has been recorded locally for rollback. No IAM/user grants were changed.
+
 ## Exact proposed changes
 
 1. Update the nine current Capricorn Gen2 functions from this protected fork, retaining names and runtime identities 01–09.
