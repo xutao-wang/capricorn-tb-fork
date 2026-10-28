@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 client = genai.Client(
     vertexai=True,
     project=runtime.project_id(),
-    location=os.environ.get('LOCATION'),
+    location=os.environ.get('LOCATION', 'global'),
 )
 
 @functions_framework.http

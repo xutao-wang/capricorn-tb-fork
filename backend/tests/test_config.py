@@ -41,3 +41,17 @@ class ConfigTests(unittest.TestCase):
         with patch.dict(os.environ, {'GEMINI_MAX_OUTPUT_TOKENS': '8192'}):
             self.assertEqual(output_token_limit(1024), 1024)
             self.assertEqual(output_token_limit(65535), 8192)
+
+    def test_environment_cannot_raise_approved_development_caps(self):
+        from capricorn_runtime import config
+        with patch.dict(os.environ, {'MAX_ARTICLES':'2'}):
+            with self.assertRaises(ValueError):
+                config.article_count(2)
+        with patch.dict(os.environ, {'BQ_MAX_BYTES_BILLED':'150000000001'}):
+            self.assertLessEqual(config.query_config().maximum_bytes_billed,150000000000)
+
+    def test_query_budget_cannot_exceed_approved_maximum(self):
+        from capricorn_runtime import config
+        for limit, expected in [('150000000001',150000000000),('123',123)]:
+            with self.subTest(limit=limit),patch.dict(os.environ, {'BQ_MAX_BYTES_BILLED':limit}):
+                self.assertEqual(config.query_config().maximum_bytes_billed,expected)

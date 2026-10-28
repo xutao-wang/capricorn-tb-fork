@@ -33,8 +33,12 @@ def output_token_limit(default):
     return min(default, positive_int('GEMINI_MAX_OUTPUT_TOKENS', default))
 
 
+def article_limit():
+    return min(1, positive_int('MAX_ARTICLES', 1))
+
+
 def article_count(value):
-    if type(value) is not int or not 1 <= value <= positive_int('MAX_ARTICLES', 1):
+    if type(value) is not int or not 1 <= value <= article_limit():
         raise ValueError('Article count exceeds the configured development limit')
     return value
 
@@ -54,5 +58,6 @@ def query_config(parameters=()):
     from google.cloud import bigquery
     return bigquery.QueryJobConfig(
         query_parameters=list(parameters),
-        maximum_bytes_billed=positive_int('BQ_MAX_BYTES_BILLED', 150_000_000_000),
+        maximum_bytes_billed=min(150_000_000_000,
+                                 positive_int('BQ_MAX_BYTES_BILLED', 150_000_000_000)),
     )

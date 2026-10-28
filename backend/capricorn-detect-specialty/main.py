@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 client = genai.Client(
     vertexai=True,
     project=runtime.project_id(),
-    location=os.environ.get('LOCATION'),
+    location=os.environ.get('LOCATION', 'global'),
 )
 
 MODEL = runtime.model_name("gemini-3.1-flash-lite")
@@ -92,21 +92,26 @@ def _classify(specialties, case_text):
     specialty_id = parsed.get('specialtyId')
     if specialty_id is not None and (not isinstance(specialty_id, str) or specialty_id not in labels_by_id):
         logger.warning('Model returned unrecognized specialty ID')
-        specialty_id = None
-    confidence = parsed.get('confidence', 0)
-    if (type(parsed.get('isClinicalCase')) is not bool
-            or type(confidence) not in (int, float) or not math.isfinite(confidence)
-            or not 0 <= confidence <= 100):
+        return {**empty, 'error': 'INVALID_CLASSIFICATION'}
+    confidence = parsed.get('confidence')
+    if ('specialtyId' not in parsed
+            or type(parsed.get('isClinicalCase')) is not bool
+            or type(confidence) not in (int, float) or not 0 <= confidence <= 100
+            or not math.isfinite(confidence)):
         return {**empty, 'error': 'INVALID_CLASSIFICATION'}
     if parsed['isClinicalCase'] is False:
         return empty
     def bounded_text(key, limit):
         value = parsed.get(key)
-        return value[:limit] if isinstance(value, str) else None
+        return value.strip()[:limit] if isinstance(value, str) else None
+    suggested_label = bounded_text('suggestedLabel', 80)
+    suggested_description = bounded_text('suggestedDescription', 500)
+    if specialty_id is None and (not suggested_label or not suggested_description):
+        return {**empty, 'error': 'INVALID_CLASSIFICATION'}
     return {'isClinicalCase': True, 'specialtyId': specialty_id, 'confidence': confidence,
             'rationale': bounded_text('rationale', 600) or '',
-            'suggestedLabel': bounded_text('suggestedLabel', 80),
-            'suggestedDescription': bounded_text('suggestedDescription', 500)}
+            'suggestedLabel': suggested_label,
+            'suggestedDescription': suggested_description}
 
 
 def _generate_persona(specialties, case_text, suggested_label, suggested_description):

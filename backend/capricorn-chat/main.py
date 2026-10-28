@@ -34,7 +34,7 @@ from google.genai import types
 client = genai.Client(
     vertexai=True,
     project=runtime.project_id(),
-    location=os.environ.get('LOCATION', 'us-central1'),
+    location=os.environ.get('LOCATION', 'global'),
 )
 
 def get_chat_history(user_id, chat_id):
@@ -189,7 +189,7 @@ def chat(request):
         def generate():
             try:
                 response = client.models.generate_content_stream(
-                    model=runtime.model_name("gemini-2.5-pro"),
+                    model=runtime.model_name("gemini-3.8-flash"),
                     contents=contents,
                     config=generate_content_config
                 )

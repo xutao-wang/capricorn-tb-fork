@@ -15,17 +15,23 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--project-id', required=True)
     parser.add_argument('--database-id', required=True)
+    parser.add_argument('--specialty-id', help='Create only this bundled specialty; existing documents are preserved')
     args = parser.parse_args()
 
-    db = firestore.Client(project=args.project_id, database=args.database_id)
-
     here = os.path.dirname(os.path.abspath(__file__))
-    for filename in os.listdir(here):
+    selected = []
+    for filename in sorted(os.listdir(here)):
         if not filename.endswith('.json'):
             continue
         with open(os.path.join(here, filename)) as f:
             specialty = json.load(f)
+        if args.specialty_id is None or specialty.get('id') == args.specialty_id:
+            selected.append((filename, specialty))
+    if not selected:
+        parser.error('No bundled specialty matches --specialty-id')
 
+    db = firestore.Client(project=args.project_id, database=args.database_id)
+    for filename, specialty in selected:
         specialty_id = specialty['id']
         try:
             db.collection('specialties').document(specialty_id).create(specialty)

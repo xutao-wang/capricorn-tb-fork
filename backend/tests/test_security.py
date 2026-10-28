@@ -127,5 +127,10 @@ class RequestBoundaryTests(unittest.TestCase):
                 self.assertEqual(self.calls, 0)
 
 
+    def test_configured_limit_cannot_expand_final_article_payload(self):
+        with patch.dict(os.environ, {'MAX_ARTICLES':'2'}):
+            self.assertEqual(self.post({'analyzed_articles':[{},{}]}).status_code,400)
+        self.assertEqual(self.calls,0)
+
 if __name__ == '__main__':
     unittest.main()

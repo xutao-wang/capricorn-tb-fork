@@ -9,7 +9,7 @@ from firebase_admin import auth
 from flask import g, jsonify, make_response
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
-from .config import positive_int, project_id
+from .config import article_limit, positive_int, project_id
 
 _app_lock = threading.Lock()
 
@@ -110,7 +110,7 @@ def protected_http(handler):
             return respond({'error': 'Events must fit the configured list limit'}, 400)
         articles = payload.get('analyzed_articles')
         if articles is not None and (not isinstance(articles, list)
-                                     or len(articles) > positive_int('MAX_ARTICLES', 1)
+                                     or len(articles) > article_limit()
                                      or any(not isinstance(article, dict) for article in articles)):
             return respond({'error': 'Articles must fit the configured list limit'}, 400)
         if 'userId' in payload and payload['userId'] != uid:
