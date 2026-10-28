@@ -6,7 +6,7 @@ export const reviewedImageProvenance = source => {
   const input = source.rendering || {};
   const rendering = {};
   const enums = {
-    Format: ['PNG', 'JPEG', 'DICOM'], Modality: ['CT', 'CR', 'DX', 'UNKNOWN'],
+    Format: ['PNG', 'JPEG', 'WEBP', 'DICOM'], Modality: ['CT', 'CR', 'DX', 'UNKNOWN'],
     PhotometricInterpretation: ['MONOCHROME1', 'MONOCHROME2'],
     WindowSource: ['VOI_LUT', 'DICOM_WINDOW', 'CT_LUNG_DEFAULT', 'PIXEL_RANGE'],
     WindowFunction: ['LINEAR', 'LINEAR_EXACT', 'SIGMOID']
