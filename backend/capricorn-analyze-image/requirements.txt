@@ -1,6 +1,8 @@
-functions-framework==3.*
+functions-framework==3.10.2
 Flask==3.1.0
-google-genai
-pydicom==2.4.4
-pillow>=10.2.0
-numpy>=1.24.0
+google-genai==2.33.0
+firebase-admin==7.1.0
+pydicom==3.0.2
+Pillow==13.0.0
+numpy==2.5.4
+pydantic==2.14.1
