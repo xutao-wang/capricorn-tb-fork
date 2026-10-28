@@ -41,7 +41,7 @@ The frontend uses the configured cloud backends; running it locally does not mak
 - DICOM signed pixels and modality rescale are applied before VOI/windowing and MONOCHROME1 inversion. CT without a supplied window uses center −600/width 1500; the applied window is recorded.
 - Structured observations cover cavitation, consolidation, bilateral extent visible in this image, and miliary pattern. Each has an explicit present/absent/indeterminate/not-assessable state. Invalid model output is an error, never fabricated findings.
 
-Use de-identified images. Only whitelisted technical DICOM metadata is sent with rendered pixels. Preview pixels remain transient browser/request data; they are not stored in chats. Reviewed text is redacted before case processing and owner-scoped chat storage. The inherited real sample files are in `frontend/research-assets/` with unverified provenance and are excluded from the public build. The text demo is a canned example, not a live vision result.
+Use de-identified images. Only whitelisted technical DICOM metadata is sent with rendered pixels. Preview pixels remain transient browser/request data; they are not stored in chats. Reviewed text is redacted before case processing and owner-scoped chat storage. Reviewed model/modality/quality and whitelisted rendering provenance are saved beside that text. The inherited real sample files are in `frontend/research-assets/` with unverified provenance and are excluded from the public build. The text demo is a canned example, not a live vision result.
 
 This is a research prototype. General vision model observations are not a diagnosis, TB confirmation, drug-resistance test, treatment decision or validated measure of whole-volume disease burden. Google describes general vision models as unsuitable for medical-image interpretation; engineering tests do not establish clinical accuracy. See [Google image-understanding guidance](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/image-understanding) and [CDC diagnostic guidance](https://www.cdc.gov/tb/hcp/testing-diagnosis/clinical-and-laboratory-diagnosis.html). TB Portals access/data authorization is a separate step; see [data access](https://tbportals.niaid.nih.gov/access-data).
 
@@ -66,6 +66,8 @@ The upgrade reuses the existing project, nine function identities, Firebase app/
 | Disease/events, specialty detection and trial screening | `gemini-3.1-flash-lite` |
 | Final synthesis | `gemini-3.1-pro-preview` |
 | Existing BigQuery embedding model | `text-embedding-005` |
+
+Model proposals were checked against [Google’s model lifecycle](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions) and [Gemini 3.8 Flash documentation](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash). Live access is verified only after cloud approval.
 
 Functions use minimum 0, maximum 1 instance, concurrency 1 and timeout 540 seconds. The image function has 1 GiB memory; others 512 MiB. One displayed/scored article maximum and a 150 GB per-query ceiling are enforced in code. The fork's deterministic journal ranking and candidate formula `min(max(n, int(n*1.4)), 25)` are preserved. The current citation table covers only three earlier test PMIDs, so missing citation counts do not establish lack of citations. These limits are not a provider-enforced dollar cap.
 
