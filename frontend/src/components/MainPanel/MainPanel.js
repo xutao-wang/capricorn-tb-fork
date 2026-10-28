@@ -26,6 +26,8 @@ const CHAT_INPUT_HEIGHT = 60; // Estimated height of ChatInput
 
 const MainPanel = ({
   chatHistory,
+  hasDocumentMessages,
+  handleRetryFinalAnalysis,
   articles,
   currentArticleData,
   isGeneratingSample,
@@ -104,10 +106,10 @@ const MainPanel = ({
     return findLastIndex(history, msg => msg.type === 'message');
   }, []);
 
-  const handleExtractWithWelcomeText = useCallback((notes,labs) => {
+  const handleExtractWithWelcomeText = useCallback((notes,labs,provenance) => {
     setShowWelcomeText(false);
 
-    handleExtract(notes,labs);
+    handleExtract(notes,labs,provenance);
   }, [handleExtract]);
 
   // Update state without scroll effects
@@ -189,6 +191,8 @@ const MainPanel = ({
           <ChatContainer
             chatInputHeight={CHAT_INPUT_HEIGHT}
             chatHistory={chatHistory}
+            hasDocumentMessages={hasDocumentMessages}
+            handleRetryFinalAnalysis={handleRetryFinalAnalysis}
             isGeneratingSample={isGeneratingSample}
             isLoadingDocs={isLoadingDocs}
             isLoadingAnalysis={isLoadingAnalysis}

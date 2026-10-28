@@ -29,6 +29,6 @@ export const getLatestMessages = async (userId, chatId) => {
     return [];
   } catch (error) {
 
-    return [];
+    throw new Error('Conversation could not be read. Please try again.');
   }
 };

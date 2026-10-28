@@ -18,63 +18,47 @@ import { normalizeDisease, normalizeEvents } from './caseValidation';
 // src/utils/api.js
 
 export const retrieveAndAnalyzeArticles = async (disease, events, specialtyId, onProgress, numArticles = DEFAULT_ARTICLES, weightOverrides) => {
+  const failure = () => new Error('Literature retrieval could not be completed. Please try again.');
+  let response;
   try {
-    // Step 1: Get PMIDs and analysis from first cloud function
-    const response = await authenticatedFetch(process.env.REACT_APP_RETRIEVE_ARTICLES_URL, {
+    response = await authenticatedFetch(process.env.REACT_APP_RETRIEVE_ARTICLES_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        events_text: events.join('\n'),
-        specialtyId: specialtyId,
-        disease: disease,
-        num_articles: clampArticleCount(numArticles),
-        weightOverrides: weightOverrides
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ events_text: events.join('\n'), specialtyId, disease,
+        num_articles: clampArticleCount(numArticles), weightOverrides })
     });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
+  } catch { throw failure(); }
+  if (!response.ok || !response.body) throw failure();
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let complete = false;
+  const processLine = async line => {
+    if (!line.trim()) return;
+    let data;
+    try { data = JSON.parse(line); } catch { throw failure(); }
+    if (!data || typeof data !== 'object' || !data.type || data.type === 'error' || complete) throw failure();
+    // Callback failures belong to the workflow, not the JSON parser.
+    await onProgress(data);
+    if (data.type === 'metadata' && data.data?.status === 'complete') complete = true;
+  };
+  try {
     while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-
-      // Add new chunk to buffer
-      buffer += decoder.decode(value, { stream: true });
-
-      // Process complete lines
-      let lineEnd = buffer.indexOf('\n');
-      while (lineEnd !== -1) {
-        const line = buffer.slice(0, lineEnd).trim();
+      let chunk;
+      try { chunk = await reader.read(); } catch { throw failure(); }
+      buffer += chunk.done ? decoder.decode() : decoder.decode(chunk.value, { stream: true });
+      let lineEnd;
+      while ((lineEnd = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, lineEnd);
         buffer = buffer.slice(lineEnd + 1);
-
-        if (!line) continue;
-
-        try {
-          const data = JSON.parse(line);
-
-          // Validate and process the data
-          if (data && typeof data === 'object' && data.type) {
-            onProgress(data);
-          }
-        } catch (parseError) {
-
-
-        }
-
-        lineEnd = buffer.indexOf('\n');
+        await processLine(line);
       }
+      if (chunk.done) break;
     }
-  } catch (error) {
-
-    throw error;
+    await processLine(buffer);
+    if (!complete) throw failure();
+  } finally {
+    reader.releaseLock?.();
   }
 };
 
@@ -360,10 +344,13 @@ export const generateFinalAnalysis = async (caseNotes, disease, events, analyzed
 
     const data = await response.json();
 
+    if (data.success === false || typeof data.analysis?.markdown_content !== 'string' || !data.analysis.markdown_content.trim()) {
+      throw new Error('Invalid final analysis');
+    }
     return data.analysis;
   } catch (error) {
 
-    throw new Error(`Failed to generate final analysis: ${error.message}`);
+    throw new Error('Final analysis could not be completed. Please try again.');
   }
 };
 

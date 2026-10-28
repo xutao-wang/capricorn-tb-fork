@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { createNewChat, getChatMessages, getDoc } from '../../firebase';
+import { createNewChat, getChatMessages } from '../../firebase';
+import { reviewedImageProvenance as sanitizeProvenance } from '../../utils/imageProvenance';
 import { createMessageId } from './messageHandlers';
-import { getLatestMessages } from './utils';
 
 export const initializeActiveChat = async ({
   user,
@@ -22,6 +22,7 @@ export const initializeActiveChat = async ({
   labResults,
   extractedDisease,
   extractedEvents,
+  reviewedImageProvenance,
   setActiveChat,
   setChatHistory,
   userId
@@ -29,6 +30,8 @@ export const initializeActiveChat = async ({
 
 
   try {
+    const provenance = sanitizeProvenance(reviewedImageProvenance);
+    const provenanceFields = provenance ? {reviewedImageProvenance: provenance} : {};
     const timestamp = new Date();
     const messageId = createMessageId('initial');
 
@@ -40,7 +43,8 @@ export const initializeActiveChat = async ({
         caseNotes,
         labResults,
         extractedDisease,
-        extractedEvents
+        extractedEvents,
+        ...provenanceFields
       }),
       role: 'user',
       timestamp,
@@ -70,7 +74,8 @@ export const initializeActiveChat = async ({
         caseNotes,
         labResults,
         extractedDisease,
-        extractedEvents
+        extractedEvents,
+        ...provenanceFields
       }
     }]);
 
@@ -138,6 +143,7 @@ export const handleChatSelect = async ({
             isUser: false,
             currentProgress: docContent.currentProgress,
             articles: docContent.articles,
+            specialtyId: docContent.specialtyId,
             timestamp: msg.timestamp
           });
           setHasDocumentMessages(true);

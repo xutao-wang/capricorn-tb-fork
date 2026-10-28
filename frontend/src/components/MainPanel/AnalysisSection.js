@@ -13,12 +13,14 @@
 // limitations under the License.
 
 import React, { useEffect, useState } from 'react';
+import { isValidExtraction } from '../../utils/caseValidation';
 import LoadingSpinner from '../LoadingSpinner';
 
 const fadeInClass = "transition-opacity duration-1000 ease-in-out";
 
 const AnalysisSection = ({
   extractedDisease,
+  detectedSpecialty,
   extractedEvents,
   isRetrieving,
   handleRetrieve,
@@ -35,6 +37,7 @@ const AnalysisSection = ({
   isLoadingFromHistory,
   isProcessingArticles
 }) => {
+  const validExtraction = isValidExtraction(extractedDisease, extractedEvents, detectedSpecialty);
   const [isRetrievalComplete, setIsRetrievalComplete] = useState(false);
   const [showProcessingMessage, setShowProcessingMessage] = useState(false);
 
@@ -86,15 +89,16 @@ useEffect(() => {
           {isPromptExpanded && (
           <button
             onClick={handleRetrieve}
-            disabled={isRetrieving || isProcessingArticles || !extractedDisease || !extractedEvents.length || hasDocumentMessages}
+            disabled={isRetrieving || isProcessingArticles || !validExtraction || hasDocumentMessages}
             className={`text-xs px-3 py-1 bg-surface-700 text-white rounded hover:bg-surface-600 focus:outline-none focus:ring-2 focus:ring-surface-500 focus:ring-offset-2 ${
-              (isRetrieving || isProcessingArticles || !extractedDisease || !extractedEvents.length || hasDocumentMessages) ? 'opacity-50 cursor-not-allowed' : ''
+              (isRetrieving || isProcessingArticles || !validExtraction || hasDocumentMessages) ? 'opacity-50 cursor-not-allowed' : ''
             }`}
           >
             {isRetrieving || isProcessingArticles ? <LoadingSpinner /> : 'Re-fetch'}
           </button>
           )}
           <button
+            aria-label={isPromptExpanded ? 'Collapse paper retrieval options' : 'Expand paper retrieval options'}
             onClick={() => setIsPromptExpanded(!isPromptExpanded)}
             className="text-gray-500 hover:text-gray-700 focus:outline-none"
           >

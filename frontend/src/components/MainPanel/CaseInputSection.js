@@ -4,6 +4,7 @@ import {DEFAULT_ARTICLES,MAX_ARTICLES,clampArticleCount} from '../../utils/confi
 import {presetCaseNotes,presetLabResults,presetTBCaseNotes,presetTBLabResults} from '../../data/presetData';
 import ImageInputModal from '../Modal/ImageInputModal';
 import LabInputModal from '../Modal/LabInputModal';
+import {reviewedImageProvenance} from '../../utils/imageProvenance';
 import RadiologyFindingsCard from './RadiologyFindingsCard';
 
 const readFile = file => new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('File could not be read.'));reader.readAsDataURL(file);});
@@ -35,7 +36,7 @@ export default function CaseInputSection({caseNotes='',setCaseNotes,labResults='
  };
  const uploadLab=async event=>{const file=event.target.files[0];if(!file)return;setError('');setBusy('Processing lab report…');try{const data=await readFile(file);const result=await processLabPDF(data.split(',')[1]);if(typeof result!=='string')throw Error();setLabResults(result);setShowLabs(true);}catch{setError('Lab report processing failed. Please try again.');}finally{setBusy('');event.target.value='';}};
  const toggleSpeech=()=>{if(listening){recognition.current?.stop();setListening(false);return;}const Speech=window.SpeechRecognition || window.webkitSpeechRecognition;if(!Speech){setError('Speech recognition is unavailable in this browser.');return;}const instance=new Speech();recognition.current=instance;instance.continuous=true;instance.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++){if(e.results[i].isFinal){const text=e.results[i][0].transcript;setCaseNotes(current=>`${current} ${text}`.trim());}}};instance.onend=()=>setListening(false);instance.onerror=()=>{setError('Speech recognition failed.');setListening(false);};instance.start();setListening(true);};
- const submit=()=>{if(busy || isProcessing || (imageSelected && reviewedText===null))return;const notes=[caseNotes,reviewedText?`[Reviewed imaging phenotypes]:\n${reviewedText}`:''].filter(Boolean).join('\n\n');handleExtract(notes,labResults);};
+ const submit=()=>{if(busy || isProcessing || (imageSelected && reviewedText===null))return;const notes=[caseNotes,reviewedText?`[Reviewed imaging phenotypes]:\n${reviewedText}`:''].filter(Boolean).join('\n\n');const provenance=reviewedText!==null && draft?reviewedImageProvenance({model:draft.model,modality:draft.parsedFindings.modality,technicalQuality:draft.parsedFindings.technicalQuality,rendering:draft.metadata}):null;if(provenance)handleExtract(notes,labResults,provenance);else handleExtract(notes,labResults);};
  if(!showCaseInput)return null;
  return <section className="bg-white border rounded-xl p-4 sm:p-6 mt-12 mb-8 shadow-sm max-h-[65vh] overflow-auto">
   {busy && <p role="status">{busy}</p>}

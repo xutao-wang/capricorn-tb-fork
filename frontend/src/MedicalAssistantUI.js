@@ -71,6 +71,10 @@ const MedicalAssistantUI = () => {
   const [isLoadingFromHistory, setIsLoadingFromHistory] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const retrievalAttemptedRef = useRef(false);
+  const retrievalBusyRef = useRef(null);
+  const retrievalCompletedRef = useRef(false);
+  const finalBusyRef = useRef(null);
+  const caseVersionRef = useRef(0);
   const [shouldRetrieve, setShouldRetrieve] = useState(false);
 
 const handleSidebarToggle = () => {
@@ -126,6 +130,10 @@ const handleSidebarToggle = () => {
   );
 
   const handleChatSelect = (chat) => {
+    caseVersionRef.current += 1;
+    retrievalCompletedRef.current = false;
+    setIsRetrieving(false);
+    setIsProcessingArticles(false);
     setIsNewChat(true);
     setCaseNotes('');
     setLabResults('');
@@ -192,8 +200,10 @@ const handleSidebarToggle = () => {
     setIsLoadingFromHistory(false);
   }, [chatHistory]);
 
-const handleExtract = async (submittedNotes = caseNotes, submittedLabs = labResults) => {
+const handleExtract = async (submittedNotes = caseNotes, submittedLabs = labResults, reviewedImageProvenance) => {
   if(isProcessing)return;
+  caseVersionRef.current += 1;
+  retrievalCompletedRef.current = false;
   setSubmissionError('');setLocalIntroduction('');
   setExtractedDisease('');setExtractedEvents([]);setDetectedSpecialty(null);
   setDetectedSpecialtyConfig(null);setWeightsConfirmed(false);setWeightOverrides(null);
@@ -204,7 +214,8 @@ const handleExtract = async (submittedNotes = caseNotes, submittedLabs = labResu
     if(result.kind==='introduction'){setLocalIntroduction(result.message);return;}
     const config=await getSpecialtyById(result.detected.specialtyId);
     if(!config)throw Error('Evidence weights are unavailable for this specialty. Please try again.');
-    await initializeActiveChat(result.caseNotes,result.labResults,result.disease,result.events);
+    if (reviewedImageProvenance) await initializeActiveChat(result.caseNotes,result.labResults,result.disease,result.events,reviewedImageProvenance);
+    else await initializeActiveChat(result.caseNotes,result.labResults,result.disease,result.events);
     setCaseNotes(result.caseNotes);setLabResults(result.labResults);
     setDetectedSpecialty(result.detected);setDetectedSpecialtyConfig(config);
     setExtractedDisease(result.disease);setExtractedEvents(result.events);
@@ -220,6 +231,13 @@ const handleExtract = async (submittedNotes = caseNotes, submittedLabs = labResu
   };
 
   const handleClearAll = useCallback(() => {
+    caseVersionRef.current += 1;
+    retrievalCompletedRef.current = false;
+    retrievalAttemptedRef.current = false;
+    setShouldRetrieve(false);
+    setJustExtracted(false);
+    setIsRetrieving(false);
+    setIsProcessingArticles(false);
     setSubmissionError('');setLocalIntroduction('');
 
 
@@ -255,15 +273,43 @@ const handleExtract = async (submittedNotes = caseNotes, submittedLabs = labResu
     setWeightsConfirmed(true);
   }, []);
 
+  const runFinalAnalysis = async (completedArticles, specialtyId, version = caseVersionRef.current) => {
+    if (finalBusyRef.current === version || version !== caseVersionRef.current) return;
+    finalBusyRef.current = version;
+    try {
+      await handleSendMessage({type: 'analysis', content: {isLoading: true}});
+      const combinedNotes = ['Case Notes:', caseNotes, '\nLab Results:', labResults].join('\n\n');
+      const finalAnalysis = await generateFinalAnalysis(combinedNotes, extractedDisease, extractedEvents, completedArticles, specialtyId);
+      if (version !== caseVersionRef.current) return;
+      if (typeof finalAnalysis?.markdown_content !== 'string' || !finalAnalysis.markdown_content.trim()) throw new Error('Invalid analysis');
+      await handleSendMessage({type: 'analysis', content: finalAnalysis.markdown_content});
+      if (version === caseVersionRef.current) setCurrentProgress('Processing complete.');
+    } catch {
+      if (version === caseVersionRef.current) {
+        setCurrentProgress('Final analysis could not be completed. Please try again.');
+        await handleSendMessage({type: 'analysis', content: {error: true}});
+      }
+    } finally { if (finalBusyRef.current === version) finalBusyRef.current = null; }
+  };
+
+  const handleRetryFinalAnalysis = () => {
+    const document = chatHistory.find(msg => msg.type === 'document');
+    if (!document || retrievalBusyRef.current === caseVersionRef.current || finalBusyRef.current === caseVersionRef.current || !chatHistory.some(msg => msg.error === 'final_analysis')) return;
+    // One deliberate synthesis request, using the retained evidence; no search.
+    runFinalAnalysis(document.articles, document.specialtyId || detectedSpecialty?.specialtyId).catch(() => {});
+  };
+
   const handleRetrieve = async () => {
 
 
     // Check if retrieval should actually occur
-    if (isProcessingArticles || !weightsConfirmed || !isValidExtraction(extractedDisease,extractedEvents,detectedSpecialty)) {
+    if (retrievalBusyRef.current === caseVersionRef.current || finalBusyRef.current === caseVersionRef.current || retrievalCompletedRef.current || hasDocumentMessages || isProcessingArticles || !weightsConfirmed || !isValidExtraction(extractedDisease,extractedEvents,detectedSpecialty)) {
 
       return;
     }
 
+    const version = caseVersionRef.current;
+    retrievalBusyRef.current = version;
     setIsRetrieving(true);
     setIsProcessingArticles(true);
     setIsPromptExpanded(false);
@@ -276,19 +322,12 @@ const handleExtract = async (submittedNotes = caseNotes, submittedLabs = labResu
     let processedArticles = [];
 
     try {
-      // Combine case notes and lab results
-      const combinedNotes = [
-        "Case Notes:",
-        caseNotes,
-        "\nLab Results:",
-        labResults
-      ].join('\n\n');
-
       await retrieveAndAnalyzeArticles(
         extractedDisease,
         extractedEvents,
         detectedSpecialty?.specialtyId,
         async (data) => {
+          if (version !== caseVersionRef.current) return;
           if (data.type === 'metadata') {
             if (data.data.status === 'processing') {
               setTotalArticles(data.data.total_articles);
@@ -298,60 +337,13 @@ const handleExtract = async (submittedNotes = caseNotes, submittedLabs = labResu
                 setCurrentProgress(`Analyzing ${data.data.total_articles} candidate articles...`);
               }
             } else if (data.data.status === 'complete') {
-              setCurrentProgress(`Article analysis complete. Generating final analysis...`);
-
-
-              // First, send the document message
-
-
-              const documentsContent = {
-                type: 'document',
-                content: {
-                  articles: processedArticles,
-                  currentProgress: currentProgress
-                }
-              };
-
-
-
-
-              await handleSendMessage(documentsContent);
-
-
-              try {
-
-                // Send the analysis loading state message
-                const loadingContent = {
-                  type: 'analysis',
-                  content: {
-                    isLoading: true
-                  }
-                };
-                await handleSendMessage(loadingContent);
-
-                const finalAnalysis = await generateFinalAnalysis(
-                  combinedNotes,
-                  extractedDisease,
-                  extractedEvents,
-                  processedArticles,
-                  detectedSpecialty?.specialtyId
-                );
-
-                // Send the analysis as a separate message
-                const analysisContent = {
-                  type: 'analysis',
-                  content: finalAnalysis.markdown_content
-                };
-
-                // Send the analysis message
-
-                await handleSendMessage(analysisContent);
-
-                setCurrentProgress('Processing complete.');
-              } catch (error) {
-
-                setCurrentProgress('Error generating final analysis. Please try again.');
-              }
+              await handleSendMessage({type: 'document', content: {
+                articles: processedArticles, currentProgress: 'Article analysis complete.',
+                specialtyId: detectedSpecialty?.specialtyId
+              }});
+              if (version !== caseVersionRef.current) return;
+              retrievalCompletedRef.current = true;
+              await runFinalAnalysis(processedArticles, detectedSpecialty?.specialtyId, version);
             }
           }
           else if (data.type === 'pmcids') {
@@ -399,11 +391,14 @@ const handleExtract = async (submittedNotes = caseNotes, submittedLabs = labResu
       );
     } catch (error) {
 
-      setCurrentProgress('Error retrieving articles. Please try again.');
+      if (version === caseVersionRef.current) setCurrentProgress('Error retrieving articles. Please try again.');
     } finally {
-      setIsRetrieving(false);
-      setIsProcessingArticles(false);
-      setCurrentArticleData(null);
+      if (retrievalBusyRef.current === version) retrievalBusyRef.current = null;
+      if (version === caseVersionRef.current) {
+        setIsRetrieving(false);
+        setIsProcessingArticles(false);
+        setCurrentArticleData(null);
+      }
     }
   };
 
@@ -469,7 +464,7 @@ useEffect(() => {
           user={user}
           onChatSelect={handleChatSelect}
           activeChat={activeChat}
-          initializeNewChat={initializeNewChat}
+          initializeNewChat={handleClearAll}
           setIsNewChat={setIsNewChat}
           isExpanded={isSidebarExpanded}
           onToggle={handleSidebarToggle}
@@ -496,6 +491,8 @@ useEffect(() => {
           setArticles={setArticles}
           currentArticleData={currentArticleData}
           chatHistory={chatHistory}
+          hasDocumentMessages={hasDocumentMessages}
+          handleRetryFinalAnalysis={handleRetryFinalAnalysis}
           isGeneratingSample={isGeneratingSample}
           isLoadingDocs={isLoadingDocs}
           isLoadingAnalysis={isLoadingAnalysis}

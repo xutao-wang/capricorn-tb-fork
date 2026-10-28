@@ -80,7 +80,8 @@ const ChatContainer = ({
   isLoadingFromHistory,
   isProcessingArticles,
   setIsProcessingArticles,
-  hasDocumentMessages
+  hasDocumentMessages,
+  handleRetryFinalAnalysis
 }) => {
   const [showExtractionSection, setShowExtractionSection] = useState(false);
   const [showAnalysisSection, setShowAnalysisSection] = useState(false);
@@ -177,6 +178,7 @@ const ChatContainer = ({
                         <div className="mb-4">
                           <AnalysisSection
                             extractedDisease={extractedDisease}
+                            detectedSpecialty={detectedSpecialty}
                             extractedEvents={extractedEvents}
                             isRetrieving={isRetrieving}
                             handleRetrieve={handleRetrieve}
@@ -250,6 +252,12 @@ const ChatContainer = ({
           })}
         </div>
 
+        {chatHistory.some(msg => msg.error === 'final_analysis') && !isLoadingAnalysis && (
+          <div className="ml-4 mt-2">
+            <p role="alert">Final analysis could not be completed. Please try again.</p>
+            <button type="button" onClick={handleRetryFinalAnalysis} disabled={isProcessingArticles}>Retry final analysis</button>
+          </div>
+        )}
         {/* Loading states */}
         {isGeneratingSample && (
           <LoadingSpinner message="Generating example case..." />

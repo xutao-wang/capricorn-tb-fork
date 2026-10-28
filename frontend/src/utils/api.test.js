@@ -5,7 +5,7 @@ jest.mock('../firebase', () => ({ auth: { currentUser: null } }));
 beforeEach(() => {
  global.TextDecoder = TextDecoder;
  auth.currentUser = { getIdToken: jest.fn().mockResolvedValue('fresh') };
- global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true, data: {}, redactedText: 'safe', analysis: 'analysis', isClinicalCase: true, specialtyId: 'tuberculosis' }), text: async () => '"cavitation"', body: { getReader: () => ({ read: async () => ({ done: true }) }) } });
+ global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true, data: {}, redactedText: 'safe', analysis: {markdown_content: 'Synthetic synthesis'}, isClinicalCase: true, specialtyId: 'tuberculosis' }), text: async () => '"cavitation"', body: { getReader: () => ({ read: jest.fn().mockResolvedValueOnce({done:false,value:new TextEncoder().encode('{"type":"metadata","data":{"status":"complete"}}\n')}).mockResolvedValue({done:true}) }) } });
 });
 test.each([
  ['ANALYZE_IMAGE', () => api.analyzeMedicalImage('synthetic','test.png','tuberculosis')],
@@ -23,11 +23,11 @@ test.each([
  await call();
  expect(fetch.mock.calls[0][0]).toBe(`/local/${name}`);
  expect(fetch.mock.calls[0][1].headers.get('Authorization')).toBe('Bearer fresh');
- if(name === 'RETRIEVE_ARTICLES') expect(JSON.parse(fetch.mock.calls[0][1].body).num_articles).toBe(1);
+
 });
 test('article stream preserves progress events', async () => {
  process.env.REACT_APP_RETRIEVE_ARTICLES_URL = '/articles';
- const read = jest.fn().mockResolvedValueOnce({ value: new TextEncoder().encode('{"type":"progress","count":1}\n'), done: false }).mockResolvedValue({ done: true });
+ const read = jest.fn().mockResolvedValueOnce({ value: new TextEncoder().encode('{"type":"progress","count":1}\n{"type":"metadata","data":{"status":"complete"}}\n'), done: false }).mockResolvedValue({ done: true });
  fetch.mockResolvedValue({ ok: true, body: { getReader: () => ({ read }) } });
  const onProgress = jest.fn(); await api.retrieveAndAnalyzeArticles('disease',[],'specialty',onProgress);
  expect(onProgress).toHaveBeenCalledWith({ type: 'progress', count: 1 });
@@ -47,4 +47,47 @@ test('signed-out image analysis cannot send pixels to network',async()=>{
 test.each([['EXTRACT_EVENTS','No actionable events identified.'],['EXTRACT_DISEASE','Error extracting disease.']])('successful HTTP cannot turn %s failure prose into a case',async(name,text)=>{
  process.env[`REACT_APP_${name}_URL`]='/local/extract';fetch.mockResolvedValue({ok:true,text:async()=>text});
  await expect(name==='EXTRACT_EVENTS'?api.extractEvents('synthetic'):api.extractDisease('synthetic')).rejects.toThrow();
+});
+
+const articleStream = chunks => {
+ const read = jest.fn();
+ chunks.forEach(chunk => read.mockResolvedValueOnce({done:false,value:new TextEncoder().encode(chunk)}));
+ read.mockResolvedValue({done:true});
+ fetch.mockResolvedValue({ok:true,body:{getReader:()=>({read})}});
+};
+const complete = '{"type":"metadata","data":{"status":"complete"}}';
+test('article stream handles arbitrary boundaries, blank CRLF lines, unicode, and final unterminated record',async()=>{
+ articleStream(['{"type":"progress","text":"syn','thetic α"}\r\n\r\n'+complete.slice(0,20),complete.slice(20)]);
+ const callback=jest.fn();
+ await api.retrieveAndAnalyzeArticles('disease',[],'specialty',callback);
+ expect(callback.mock.calls.map(([data])=>data)).toEqual([{type:'progress',text:'synthetic α'},{type:'metadata',data:{status:'complete'}}]);
+});
+test.each([
+ ['error event',['{"type":"error","data":{"message":"private upstream body"}}\n']],
+ ['truncated stream',['{"type":"progress"}\n']],
+ ['malformed terminal',['{"type":"metadata","data":']],
+])('article stream rejects %s safely',async(_,chunks)=>{
+ articleStream(chunks);
+ await expect(api.retrieveAndAnalyzeArticles('disease',[],'specialty',jest.fn())).rejects.toThrow(/Literature retrieval could not be completed/);
+});
+test('article stream awaits final callback and propagates callback rejection',async()=>{
+ articleStream([complete+'\n']);
+ let rejectCallback; const callback=jest.fn(()=>{const pending=new Promise((_,reject)=>{rejectCallback=reject;});pending.catch(()=>{});return pending;});
+ let settled=false;
+ const result=api.retrieveAndAnalyzeArticles('disease',[],'specialty',callback).finally(()=>{settled=true;});
+ await new Promise(resolve=>setTimeout(resolve,0));
+ const settledBeforeCallback=settled;
+ expect(callback).toHaveBeenCalledTimes(1);
+ rejectCallback(Error('Synthetic persistence failed'));
+ await expect(result).rejects.toThrow('Synthetic persistence failed');
+ expect(settledBeforeCallback).toBe(false);
+});
+test.each([{analysis:{}},{analysis:{markdown_content:''}},{success:false,analysis:{markdown_content:'not valid'}}])('final response requires successful nonempty markdown %#',async payload=>{
+ fetch.mockResolvedValue({ok:true,json:async()=>payload});
+ await expect(api.generateFinalAnalysis('case','disease',[],[],'specialty')).rejects.toThrow(/Final analysis could not be completed/);
+});
+
+test('retrieval request clamps its article count to one',async()=>{
+ await api.retrieveAndAnalyzeArticles('disease',['event'],'specialty',()=>{},15);
+ expect(JSON.parse(fetch.mock.calls[0][1].body).num_articles).toBe(1);
 });

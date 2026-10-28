@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { handleSendMessage } from './chat/messageHandlers';
 import { initializeActiveChat, initializeNewChat, handleChatSelect } from './chat/chatState';
 import { deleteChat } from '../firebase';
@@ -25,13 +25,15 @@ const useChat = (user, selectedSpecialtyId) => {
   const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
   const [activeChat, setActiveChat] = useState(null);
   const [message, setMessage] = useState('');
+  const chatScopeRef = useRef(0);
   const [hasDocumentMessages, setHasDocumentMessages] = useState(false);
 
   useEffect(() => {
     setHasDocumentMessages(chatHistory.some(msg => msg.type === 'document' || msg.documents));
   }, [chatHistory]);
 
-  const handleInitializeActiveChat = useCallback(async (caseNotes, labResults, extractedDisease, extractedEvents) => {
+  const handleInitializeActiveChat = useCallback(async (caseNotes, labResults, extractedDisease, extractedEvents, reviewedImageProvenance) => {
+    chatScopeRef.current += 1;
     // If there's an active temporary chat, delete it first
     if (!user && activeChat) {
       try {
@@ -47,12 +49,16 @@ const useChat = (user, selectedSpecialtyId) => {
       labResults,
       extractedDisease,
       extractedEvents,
+      reviewedImageProvenance,
       setActiveChat,
       setChatHistory
     });
   }, [user, userId, activeChat]);
 
   const handleInitializeNewChat = useCallback(() => {
+    chatScopeRef.current += 1;
+    setIsLoadingAnalysis(false);
+    setIsLoadingDocs(false);
     initializeNewChat({
       setActiveChat,
       setChatHistory
@@ -60,6 +66,9 @@ const useChat = (user, selectedSpecialtyId) => {
   }, []);
 
   const handleChatSelection = useCallback(async (chat) => {
+    chatScopeRef.current += 1;
+    setIsLoadingAnalysis(false);
+    setIsLoadingDocs(false);
     await handleChatSelect({
       chat,
       setActiveChat,
@@ -71,22 +80,26 @@ const useChat = (user, selectedSpecialtyId) => {
   }, [handleInitializeNewChat, userId]);
 
   const handleMessageSend = useCallback(async (e) => {
+    const scope = chatScopeRef.current;
+    const scopedSetter = setter => value => {
+      if (chatScopeRef.current === scope) setter(value);
+    };
     await handleSendMessage({
       e,
       message,
       setMessage,
       user: { uid: userId },
       activeChat,
-      setActiveChat,
-      setChatHistory,
+      setActiveChat: scopedSetter(setActiveChat),
+      setChatHistory: scopedSetter(setChatHistory),
       isLoadingDocs,
-      setIsLoadingDocs,
+      setIsLoadingDocs: scopedSetter(setIsLoadingDocs),
       isLoadingAnalysis,
-      setIsLoadingAnalysis,
+      setIsLoadingAnalysis: scopedSetter(setIsLoadingAnalysis),
       userId,
       selectedSpecialtyId
     });
-  }, [message, isLoadingDocs, isLoadingAnalysis, activeChat, user, selectedSpecialtyId]);
+  }, [message, isLoadingDocs, isLoadingAnalysis, activeChat, userId, selectedSpecialtyId]);
 
   return {
     chatHistory,

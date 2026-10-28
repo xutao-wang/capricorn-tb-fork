@@ -80,44 +80,39 @@ const handleAnalysisOrDocumentMessage = async ({
   setIsLoadingAnalysis,
   userId
 }) => {
+  if (e.type === 'analysis' && e.content?.isLoading) {
+    setIsLoadingAnalysis(true);
+    setChatHistory(previous => previous.filter(msg => msg.error !== 'final_analysis'));
+    return;
+  }
+  const isAnalysis = e.type === 'analysis';
+  const isError = isAnalysis && e.content?.error;
+  // A failed request must settle the hook even if error persistence also fails.
+  if (isError) setIsLoadingAnalysis(false);
   try {
+    const timestamp = new Date();
+    const messageId = createMessageId(isError ? 'error' : e.type);
+    const errorText = 'Final analysis could not be completed. Please try again.';
+    const newMessage = isError
+      ? {id: messageId, text: errorText, isUser: false, error: 'final_analysis', timestamp}
+      : createMessage(e, messageId, timestamp);
+    if (isError) setChatHistory(previous => [...previous.filter(msg => msg.error !== 'final_analysis'), newMessage]);
     let currentChatId = activeChat?.id;
-    let messagesForFirestore = [...(activeChat?.messages || [])];
-
     if (!currentChatId) {
-      const initialMessages = [];
-      currentChatId = await createNewChat(user?.uid || userId, initialMessages);
-      setActiveChat({ id: currentChatId, messages: initialMessages });
+      currentChatId = await createNewChat(user?.uid || userId, []);
+      setActiveChat({id: currentChatId, messages: []});
     }
-
-    if (e.type === 'document' || e.type === 'analysis') {
-      if (e.type === 'analysis' && e.content?.isLoading) {
-        setIsLoadingAnalysis(true);
-        return;
-      }
-
-      const latestMessages = await getLatestMessages(user?.uid || userId, currentChatId);
-      const timestamp = new Date();
-      const messageId = createMessageId(e.type);
-
-      const newMessage = createMessage(e, messageId, timestamp);
-      const firestoreMessage = createFirestoreMessage(e, messageId, timestamp);
-
-      if (e.type === 'analysis' && !e.content?.isLoading) {
-        setIsLoadingAnalysis(false);
-      }
-
-      setChatHistory(prev => [...prev, newMessage]);
-
-      latestMessages.push(firestoreMessage);
-      await addMessageToChat(user?.uid || userId, currentChatId, latestMessages);
-      setActiveChat(current => ({
-        ...current,
-        messages: latestMessages
-      }));
-    }
-  } catch (error) {
-
+    const latestMessages = await getLatestMessages(user?.uid || userId, currentChatId);
+    const firestoreMessage = isError
+      ? {content: errorText, role: 'assistant', timestamp, type: 'error', error: 'final_analysis', messageId}
+      : createFirestoreMessage(e, messageId, timestamp);
+    const messages = isAnalysis ? latestMessages.filter(msg => msg.error !== 'final_analysis') : latestMessages;
+    messages.push(firestoreMessage);
+    await addMessageToChat(user?.uid || userId, currentChatId, messages);
+    if (!isError) setChatHistory(previous => [...(isAnalysis ? previous.filter(msg => msg.error !== 'final_analysis') : previous), newMessage]);
+    setActiveChat(current => ({...current, messages}));
+  } finally {
+    if (isAnalysis) setIsLoadingAnalysis(false);
   }
 };
 
@@ -240,6 +235,7 @@ const createMessage = (e, messageId, timestamp) => {
       isUser: false,
       currentProgress: e.content.currentProgress,
       articles: e.content.articles,
+      specialtyId: e.content.specialtyId,
       timestamp
     };
   }
