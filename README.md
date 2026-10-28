@@ -63,7 +63,7 @@ The upgrade reuses the existing project, nine function identities, Firebase app/
 | Caller | Explicit model |
 | --- | --- |
 | Image, chat, lab and article scoring | `gemini-3.8-flash` |
-| Disease/events, specialty detection, date and trial screening | `gemini-3.1-flash-lite` |
+| Disease/events, specialty detection and trial screening | `gemini-3.1-flash-lite` |
 | Final synthesis | `gemini-3.1-pro-preview` |
 | Existing BigQuery embedding model | `text-embedding-005` |
 
@@ -81,6 +81,6 @@ CI=true npm test -- --watchAll=false --runInBand
 npm run build
 ```
 
-For backend tests, install the pinned shared requirements from `backend/capricorn-chat/requirements.txt` plus the image requirements in a Python 3.12 virtual environment first. The prepared isolated test environment is recorded in the status document.
+For backend tests, install the pinned shared requirements from `backend/requirements-test.txt` plus `backend/capricorn-analyze-image/requirements.txt` in a Python 3.12 virtual environment first. The prepared isolated test environment is recorded in the status document.
 
 The original checkout `/Users/xutaowang/Documents/Rutgers_work/capricorn_v2` and its active `.deploy/` are preserved as the rollback source. Deployment must first save current function descriptions/env/IAM and the previous Hosting release in a new TB ledger. Rollback restores the earlier nine sources/envs and Hosting release; the new image service can remain private with minimum zero instances. Preserve all Firestore and BigQuery data. No deletion is needed to pause local work.
