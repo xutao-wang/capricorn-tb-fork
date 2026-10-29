@@ -1,8 +1,8 @@
 # TB fork setup status — October 28, 2026
 
-**Deployed and technically verified:** https://capricorn-njms-tb-image-study.web.app  
-**Local:** http://localhost:3000  
-**Permanent checkout:** `/Users/xutaowang/Documents/Rutgers_work/capricorn-tb-fork`  
+**Deployed and technically verified:** https://capricorn-njms-tb-image-study.web.app
+**Local:** http://localhost:3000
+**Permanent checkout:** `/Users/xutaowang/Documents/Rutgers_work/capricorn-tb-fork`
 **Branch:** `codex/tb-imaging-setup`, based on fork `b80b609fbda310d59fbe729bd7834f2d0e9fa86a`.
 
 The user approved the exact cloud upgrade and additional $20 working budget. All ten functions and the image-enabled frontend are deployed. Eight bounded live checks passed; conservative reservations total $9.80, not final billing. See [deployment status](tb-deployment-status-2026-10-28.md) for use, evidence, limits and rollback.

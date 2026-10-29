@@ -1,9 +1,9 @@
 # TB imaging deployment — October 28, 2026
 
-**Live:** https://capricorn-njms-tb-image-study.web.app  
-**Local:** http://localhost:3000  
-**Checkout:** `/Users/xutaowang/Documents/Rutgers_work/capricorn-tb-fork`  
-**Branch:** `codex/tb-imaging-setup`  
+**Live:** https://capricorn-njms-tb-image-study.web.app
+**Local:** http://localhost:3000
+**Checkout:** `/Users/xutaowang/Documents/Rutgers_work/capricorn-tb-fork`
+**Branch:** `codex/tb-imaging-setup`
 **Project/account:** `njms-tb-image-study` / `xw488@gcp.rutgers.edu`
 
 The approved upgrade is deployed and technically verified. Source is retained locally; no GitHub push was required.
