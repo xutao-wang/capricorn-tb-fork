@@ -122,10 +122,11 @@ const GENERATE_CASE_URL = process.env.REACT_APP_GENERATE_CASE_URL;
  * @param {string} text - The text to redact
  * @returns {Promise<string>} - A promise that resolves to the redacted text
  */
-export const redactSensitiveInfo = async (text) => {
+export const redactSensitiveInfo = async (text, options = {}) => {
   try {
     const response = await authenticatedFetch(process.env.REACT_APP_REDACT_URL, {
       method: 'POST',
+      reportError: options.reportError,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -140,17 +141,18 @@ export const redactSensitiveInfo = async (text) => {
     return data.redactedText;
   } catch (error) {
 
-    throw new Error(`Failed to redact sensitive information: ${error.message}`);
+    throw error;
   }
 };
 
 // Detects which specialty persona should analyze this case, before any
 // specialty-driven extraction runs. See docs/auto-specialty-detection-plan.md
 // at the repo root.
-export const detectSpecialty = async (text) => {
+export const detectSpecialty = async (text, options = {}) => {
   try {
     const response = await authenticatedFetch(process.env.REACT_APP_DETECT_SPECIALTY_URL, {
       method: 'POST',
+      reportError: options.reportError,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -170,10 +172,11 @@ export const detectSpecialty = async (text) => {
   }
 };
 
-export const extractDisease = async (text, specialtyId) => {
+export const extractDisease = async (text, specialtyId, options = {}) => {
   try {
     const response = await authenticatedFetch(process.env.REACT_APP_EXTRACT_DISEASE_URL, {
       method: 'POST',
+      reportError: options.reportError,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -192,10 +195,11 @@ export const extractDisease = async (text, specialtyId) => {
   }
 };
 
-export const extractEvents = async (text, specialtyId) => {
+export const extractEvents = async (text, specialtyId, options = {}) => {
   try {
     const response = await authenticatedFetch(process.env.REACT_APP_EXTRACT_EVENTS_URL, {
       method: 'POST',
+      reportError: options.reportError,
       headers: {
         'Content-Type': 'application/json',
       },

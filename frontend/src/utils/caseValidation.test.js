@@ -68,3 +68,41 @@ describe('review regressions: clinical response semantics', () => {
     ]);
   });
 });
+
+
+test.each([
+ ['redactSensitiveInfo', /Redaction failed/i],
+ ['detectSpecialty', /Specialty detection failed/i],
+ ['extractDisease', /Disease extraction failed/i],
+ ['extractEvents', /Actionable-finding extraction failed/i],
+])('a rejected %s request identifies its stage without exposing the raw error', async (method, message) => {
+ const api=services();
+ api[method].mockRejectedValue(Object.assign(new Error('private server details'), {status:503}));
+ let failure;
+ try { await prepareClinicalCase('synthetic case', '', api); } catch(error) { failure=error; }
+ expect(failure.message).toMatch(message);
+ expect(failure.message).toContain('HTTP 503');
+ expect(failure.message).not.toContain('private server details');
+});
+
+test('a sign-in failure keeps actionable sign-in guidance instead of blaming case content', async () => {
+ const api=services();
+ api.detectSpecialty.mockRejectedValue(Object.assign(new Error('private'), {status:401}));
+ await expect(prepareClinicalCase('synthetic case', '', api)).rejects.toThrow(/sign in again/i);
+});
+
+
+test('notes and labs redact one at a time for the single-instance backend', async () => {
+ const api=services();
+ let releaseNotes;
+ api.redactSensitiveInfo.mockImplementationOnce(()=>new Promise(resolve=>{releaseNotes=resolve;})).mockResolvedValueOnce('safe labs');
+ const pending=prepareClinicalCase('synthetic notes','synthetic labs',api);
+ await Promise.resolve();
+ const simultaneousCalls=api.redactSensitiveInfo.mock.calls.length;
+ releaseNotes('safe notes');
+ const result=await pending;
+ expect(simultaneousCalls).toBe(1);
+ expect(api.redactSensitiveInfo).toHaveBeenCalledTimes(2);
+ expect(result.caseNotes).toBe('safe notes');
+ expect(result.labResults).toBe('safe labs');
+});

@@ -31,3 +31,24 @@ test('review provenance follows reconfirmed replacement and disappears on remova
  fireEvent.click(screen.getByRole('button',{name:'Submit case'}));
  expect(submit.mock.calls[2]).toEqual(['synthetic notes','']);
 });
+
+
+test('uploading a real image clears the canned-demo no-analysis label', async () => {
+ api.analyzeMedicalImage.mockResolvedValue(draft);
+ render(<Harness submit={jest.fn()}/>);
+ fireEvent.click(screen.getByRole('button', {name:'Canned TB text demo'}));
+ expect(screen.getByText(/no image analysis was performed/i)).toBeInTheDocument();
+ await upload();
+ expect(screen.queryByText(/no image analysis was performed/i)).not.toBeInTheDocument();
+ expect(screen.getByText(/canned clinical notes may not describe the uploaded image/i)).toBeInTheDocument();
+});
+
+test('confirming no positive imaging findings still submits the supplied clinical context', async () => {
+ api.analyzeMedicalImage.mockResolvedValue({...draft, actionableEvents:[], parsedFindings:{...draft.parsedFindings, findings:draft.parsedFindings.findings.map(f=>({...f,status:'absent'}))}});
+ const submit=jest.fn();
+ render(<Harness submit={submit}/>);
+ await upload();
+ fireEvent.click(screen.getByRole('button', {name:/confirm reviewed findings/i}));
+ fireEvent.click(screen.getByRole('button', {name:'Submit case'}));
+ expect(submit).toHaveBeenCalledWith('synthetic notes', '');
+});

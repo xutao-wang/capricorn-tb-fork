@@ -57,3 +57,27 @@ test('dotted clinical terms initialize a case but still require evidence-weight 
   fireEvent.click(screen.getByText('Retrieve'));
   expect(api.retrieveAndAnalyzeArticles).not.toHaveBeenCalled();
 });
+
+
+test('submission displays the failed extraction stage without exposing server details', async () => {
+ api.detectSpecialty.mockResolvedValue({isClinicalCase:true,specialtyId:'tb'});
+ api.extractDisease.mockResolvedValue('Tuberculosis');
+ api.extractEvents.mockRejectedValue(Object.assign(new Error('private server details'), {status:503}));
+ render(<MedicalAssistantUI/>);
+ fireEvent.click(screen.getByText('Extract'));
+ const alert=await screen.findByRole('alert');
+ expect(alert).toHaveTextContent(/Actionable-finding extraction failed.*HTTP 503/i);
+ expect(alert).not.toHaveTextContent('private server details');
+ expect(initializeActiveChat).not.toHaveBeenCalled();
+});
+
+test('missing specialty configuration has its own error instead of blaming the case', async () => {
+ api.detectSpecialty.mockResolvedValue({isClinicalCase:true,specialtyId:'tb'});
+ api.extractDisease.mockResolvedValue('Tuberculosis');
+ api.extractEvents.mockResolvedValue(['cavitation']);
+ getSpecialtyById.mockResolvedValue(null);
+ render(<MedicalAssistantUI/>);
+ fireEvent.click(screen.getByText('Extract'));
+ expect(await screen.findByRole('alert')).toHaveTextContent(/Evidence weights could not be loaded/i);
+ expect(initializeActiveChat).not.toHaveBeenCalled();
+});

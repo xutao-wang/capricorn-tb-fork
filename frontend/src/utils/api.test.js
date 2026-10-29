@@ -1,6 +1,7 @@
 import { TextDecoder, TextEncoder } from 'util';
 import { auth } from '../firebase';
 import * as api from './api';
+import {prepareClinicalCase} from './caseValidation';
 jest.mock('../firebase', () => ({ auth: { currentUser: null } }));
 beforeEach(() => {
  global.TextDecoder = TextDecoder;
@@ -90,4 +91,32 @@ test.each([{analysis:{}},{analysis:{markdown_content:''}},{success:false,analysi
 test('retrieval request clamps its article count to one',async()=>{
  await api.retrieveAndAnalyzeArticles('disease',['event'],'specialty',()=>{},15);
  expect(JSON.parse(fetch.mock.calls[0][1].body).num_articles).toBe(1);
+});
+
+
+test('redaction adapter preserves authentication status through the real submission pipeline', async () => {
+ process.env.REACT_APP_REDACT_URL='/local/redact';
+ fetch.mockResolvedValue({ok:false,status:401});
+ await expect(prepareClinicalCase('synthetic case', '', api)).rejects.toThrow(/Redaction failed.*HTTP 401.*sign in again/i);
+ expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+
+test('a late failed extraction sibling cannot broadcast over the submission-owned error', async () => {
+ for (const name of ['REDACT','DETECT_SPECIALTY','EXTRACT_DISEASE','EXTRACT_EVENTS']) process.env[`REACT_APP_${name}_URL`]=`/local/${name}`;
+ let rejectEvents;
+ fetch.mockImplementation(async url => {
+  if (url==='/local/REDACT') return {ok:true,json:async()=>({redactedText:'synthetic clinical context'})};
+  if (url==='/local/DETECT_SPECIALTY') return {ok:true,json:async()=>({isClinicalCase:true,specialtyId:'tuberculosis'})};
+  if (url==='/local/EXTRACT_DISEASE') return {ok:false,status:503};
+  return new Promise(resolve=>{rejectEvents=()=>resolve({ok:false,status:503});});
+ });
+ const listener=jest.fn();
+ window.addEventListener('capricorn-request-error', listener);
+ try {
+  await expect(prepareClinicalCase('synthetic case','',api)).rejects.toThrow(/Disease extraction failed.*HTTP 503/);
+  rejectEvents();
+  await new Promise(resolve=>setTimeout(resolve,0));
+  expect(listener).not.toHaveBeenCalled();
+ } finally { window.removeEventListener('capricorn-request-error',listener); }
 });

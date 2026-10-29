@@ -30,3 +30,23 @@ test('network exceptions show a safe message rather than raw exception bodies',a
  auth.currentUser={getIdToken:async()=> 'synthetic-token'};fetch.mockRejectedValue(Error('untrusted private body'));
  await expect(authenticatedFetch('/local')).rejects.toThrow('Network request failed. Please try again.');
 });
+
+
+test.each([401,403,422,429,503])('safe request errors retain HTTP status %s for submission diagnostics', async status => {
+ auth.currentUser={getIdToken:async()=> 'synthetic-token'};
+ fetch.mockResolvedValue({ok:false,status});
+ await expect(authenticatedFetch('/local')).rejects.toMatchObject({status});
+});
+
+
+test('a workflow-owned failure throws safely without broadcasting a competing global error', async () => {
+ auth.currentUser={getIdToken:async()=> 'synthetic-token'};
+ fetch.mockResolvedValue({ok:false,status:503});
+ const listener=jest.fn();
+ window.addEventListener('capricorn-request-error', listener);
+ try {
+  await expect(authenticatedFetch('/local',{reportError:false})).rejects.toMatchObject({status:503});
+  expect(listener).not.toHaveBeenCalled();
+  expect(fetch.mock.calls[0][1]).not.toHaveProperty('reportError');
+ } finally { window.removeEventListener('capricorn-request-error',listener); }
+});

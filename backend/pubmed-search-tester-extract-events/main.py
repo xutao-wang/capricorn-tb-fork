@@ -69,6 +69,12 @@ def extract_events(request):
             candidate_count=1,
             max_output_tokens=runtime.output_token_limit(8192),
             response_modalities=["TEXT"],
+            response_mime_type="application/json",
+            response_schema=types.Schema(
+                type=types.Type.ARRAY,
+                items=types.Schema(type=types.Type.STRING),
+                max_items=runtime.positive_int('MAX_EVENTS', 10),
+            ),
             safety_settings=[
                 types.SafetySetting(
                     category="HARM_CATEGORY_HATE_SPEECH",

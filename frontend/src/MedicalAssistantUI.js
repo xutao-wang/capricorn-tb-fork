@@ -31,7 +31,7 @@ import useChat from './hooks/useChat';
 
 // API
 import { redactSensitiveInfo, generateSampleCase, extractDisease, extractEvents, retrieveAndAnalyzeArticles, generateFinalAnalysis, sendFeedback, detectSpecialty } from './utils/api';
-import { prepareClinicalCase, isValidExtraction } from './utils/caseValidation';
+import { prepareClinicalCase, isValidExtraction, CasePreparationError } from './utils/caseValidation';
 import { DEFAULT_ARTICLES } from './utils/config';
 import { REQUEST_ERROR_EVENT } from './utils/request';
 import { getSpecialtyById } from './firebase';
@@ -209,19 +209,22 @@ const handleExtract = async (submittedNotes = caseNotes, submittedLabs = labResu
   setDetectedSpecialtyConfig(null);setWeightsConfirmed(false);setWeightOverrides(null);
   setShouldRetrieve(false);setJustExtracted(false);retrievalAttemptedRef.current=false;
   setIsProcessing(true);
+  let submissionStage='case';
   try {
     const result=await prepareClinicalCase(submittedNotes,submittedLabs,{redactSensitiveInfo,detectSpecialty,extractDisease,extractEvents});
     if(result.kind==='introduction'){setLocalIntroduction(result.message);return;}
+    submissionStage='weights';
     const config=await getSpecialtyById(result.detected.specialtyId);
     if(!config)throw Error('Evidence weights are unavailable for this specialty. Please try again.');
+    submissionStage='save';
     if (reviewedImageProvenance) await initializeActiveChat(result.caseNotes,result.labResults,result.disease,result.events,reviewedImageProvenance);
     else await initializeActiveChat(result.caseNotes,result.labResults,result.disease,result.events);
     setCaseNotes(result.caseNotes);setLabResults(result.labResults);
     setDetectedSpecialty(result.detected);setDetectedSpecialtyConfig(config);
     setExtractedDisease(result.disease);setExtractedEvents(result.events);
     setJustExtracted(true);setShouldRetrieve(true);
-  } catch {
-    setSubmissionError('Case extraction could not be completed. Check that the input contains a clinical case and actionable findings, then try again. Redaction or service failures stop submission.');
+  } catch (error) {
+    setSubmissionError(error instanceof CasePreparationError ? error.message : new CasePreparationError(submissionStage, error).message);
   } finally {setIsProcessing(false);}
 };
 

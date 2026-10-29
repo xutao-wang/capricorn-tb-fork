@@ -143,9 +143,9 @@ test('reviewed four-finding image and confirmed weights permit exactly one retri
 
   const continueButton = await screen.findByRole('button', { name: 'Continue to fetch papers' });
   expect(api.redactSensitiveInfo).toHaveBeenCalledTimes(1);
-  expect(api.detectSpecialty).toHaveBeenCalledWith(expect.stringContaining('[REDACTED]'));
+  expect(api.detectSpecialty).toHaveBeenCalledWith(expect.stringContaining('[REDACTED]'), {reportError:false});
   expect(api.extractEvents).toHaveBeenCalledWith(
-    expect.stringContaining('cavitation in clinician-reviewed right upper lung'), 'tuberculosis',
+    expect.stringContaining('cavitation in clinician-reviewed right upper lung'), 'tuberculosis', {reportError:false},
   );
   expect(api.retrieveAndAnalyzeArticles).not.toHaveBeenCalled();
   expect(createNewChat).toHaveBeenCalledTimes(1);

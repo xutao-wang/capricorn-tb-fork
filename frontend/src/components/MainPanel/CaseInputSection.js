@@ -42,7 +42,7 @@ export default function CaseInputSection({caseNotes='',setCaseNotes,labResults='
   {busy && <p role="status">{busy}</p>}
   {draft && <RadiologyFindingsCard findingsData={draft} previewUrl={preview} onRemove={removeImage} onReviewChange={setReviewedText}/>}
   {imageSelected && !draft && !busy && <button type="button" onClick={removeImage}>Remove image</button>}
-  {demo && <p role="note">Canned text demonstration — no image analysis was performed. This example does not establish clinical accuracy.</p>}
+  {demo && <p role="note">{imageSelected ? 'Canned clinical notes may not describe the uploaded image. Review or replace these notes before submitting.' : 'Canned text demonstration — no image analysis was performed. This example does not establish clinical accuracy.'}</p>}
   <textarea aria-label="Case notes" placeholder="Enter clinical case notes, or upload a CXR / selected CT slice" className="w-full min-h-24 p-2" value={caseNotes} onChange={e=>setCaseNotes(e.target.value)}/>
   {showLabs && <textarea aria-label="Lab results" placeholder="Enter lab results" className="w-full p-2 border-t" value={labResults} onChange={e=>setLabResults(e.target.value)}/>}
   <div className="flex flex-wrap gap-3 items-center mt-3">

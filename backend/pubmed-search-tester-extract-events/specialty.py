@@ -35,6 +35,7 @@ def _indent(block, spaces=4):
 
 
 def build_event_extraction_prompt(specialty):
+    max_events = runtime.positive_int('MAX_EVENTS', 10)
     persona_title = specialty['personaTitle']
     board_name = specialty.get('boardName')
     board_clause = f" and chair of the {board_name}" if board_name else ""
@@ -84,4 +85,4 @@ def build_event_extraction_prompt(specialty):
 
 {post_category_notes}
 
-{example_section}{guidance_section}Extract actionable events from the provided patient information. Only output the list of actionable events. Do not include any other text or formatting."""
+{example_section}{guidance_section}Extract actionable events from the provided patient information. Return only a JSON array containing at most {max_events} distinct, concise strings (each no longer than 240 characters), with no markdown or other formatting. If more findings are available, prioritize the most relevant reviewed imaging phenotypes, explicit microbiology and drug-resistance results, and major clinical modifiers for literature search. Combine closely related findings where appropriate, preserving locations, drug names and mutations. Do not invent findings or infer clinical facts from imaging alone. If no actionable findings are supplied, return an empty array."""

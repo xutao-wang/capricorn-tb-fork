@@ -109,35 +109,67 @@ export const isValidExtraction = (disease, events, specialty) => {
   }
 };
 
+const preparationMessages = {
+  input: 'Please add clinical case information.',
+  redaction: 'Redaction failed',
+  specialty: 'Specialty detection failed',
+  nonclinical: 'No clinical case was identified. Please add clinical case information.',
+  disease: 'Disease extraction failed',
+  events: 'Actionable-finding extraction failed',
+  weights: 'Evidence weights could not be loaded',
+  save: 'The case could not be saved',
+  case: 'Case submission failed',
+};
+
+// Only application-owned messages and numeric HTTP statuses reach the banner.
+// Provider errors can contain case content, so never display their raw text.
+export class CasePreparationError extends Error {
+  constructor(stage, cause) {
+    const status = Number.isInteger(cause?.status) && cause.status >= 400 && cause.status <= 599 ? cause.status : undefined;
+    const message = preparationMessages[stage] || preparationMessages.case;
+    const guidance = status === 401 ? 'Please sign in again to continue.'
+      : status === 403 ? 'Your Google account is not authorized for this action.'
+      : 'Submission stopped; please try again.';
+    super(['input', 'nonclinical'].includes(stage) ? message : `${message}${status ? ` (HTTP ${status})` : ''}. ${guidance}`);
+    this.stage = stage;
+    this.status = status;
+  }
+}
+
+const prepareStage = async (stage, operation) => {
+  try { return await operation(); }
+  catch (error) { throw new CasePreparationError(stage, error); }
+};
+
 export const prepareClinicalCase = async (caseNotes, labResults, api) => {
   if (isAppIntroduction(caseNotes) && !labResults.trim()) return { kind: 'introduction', message: APP_INTRODUCTION };
-  if (!caseNotes.trim() && !labResults.trim()) throw new Error('Please add clinical case information.');
+  if (!caseNotes.trim() && !labResults.trim()) throw new CasePreparationError('input');
   let notes;
   let labs;
   try {
-    [notes, labs] = await Promise.all([
-      caseNotes.trim() ? api.redactSensitiveInfo(caseNotes) : '',
-      labResults.trim() ? api.redactSensitiveInfo(labResults) : '',
-    ]);
+    // The redaction service permits one concurrent request; avoid competing
+    // cold starts when both fields are populated.
+    notes = caseNotes.trim() ? await api.redactSensitiveInfo(caseNotes, {reportError:false}) : '';
+    labs = labResults.trim() ? await api.redactSensitiveInfo(labResults, {reportError:false}) : '';
     if (typeof notes !== 'string' || typeof labs !== 'string') throw new Error();
-  } catch {
-    throw new Error('Redaction failed. Submission stopped; please try again.');
+  } catch (error) {
+    throw new CasePreparationError('redaction', error);
   }
   const combinedNotes = `Case Notes:\n${notes}\n\nLab Results:\n${labs}`;
-  const detected = await api.detectSpecialty(combinedNotes);
+  const detected = await prepareStage('specialty', () => api.detectSpecialty(combinedNotes, {reportError:false}));
   if (detected?.isClinicalCase !== true || !detected.specialtyId) {
-    throw new Error('No clinical case was identified. Please add clinical case information.');
+    throw new CasePreparationError('nonclinical');
   }
   const [disease, events] = await Promise.all([
-    api.extractDisease(combinedNotes, detected.specialtyId),
-    api.extractEvents(combinedNotes, detected.specialtyId),
+    prepareStage('disease', async () => normalizeDisease(await api.extractDisease(combinedNotes, detected.specialtyId, {reportError:false}))),
+    prepareStage('events', async () => normalizeEvents(await api.extractEvents(combinedNotes, detected.specialtyId, {reportError:false}))),
   ]);
   return {
     kind: 'case',
     caseNotes: notes,
     labResults: labs,
     detected,
-    disease: normalizeDisease(disease),
-    events: normalizeEvents(events),
+    disease,
+    events,
   };
 };
