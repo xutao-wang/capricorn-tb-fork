@@ -1,6 +1,6 @@
 # Final cloud review: TB imaging upgrade
 
-Prepared locally for `njms-tb-image-study` (`1077389854176`), deployer `xw488@gcp.rutgers.edu`, October 28, 2026. **Apply and additional spending are pending user approval.** No TB-phase cloud mutation, model request or paid BigQuery query has occurred.
+Prepared locally for `njms-tb-image-study` (`1077389854176`), deployer `xw488@gcp.rutgers.edu`, October 28, 2026. **Approved by the user and deployed on October 28, 2026.** This document records the reviewed proposal; completed changes, live evidence and budget reservations are in [deployment status](tb-deployment-status-2026-10-28.md).
 
 Read-only readiness checks confirm all nine existing functions are ACTIVE, the image runtime account and TB document are absent, the approved deployer already has project Owner, and the existing verifier role contains only `firebaseauth.users.get`. The current Hosting release has been recorded locally for rollback. No IAM/user grants were changed.
 

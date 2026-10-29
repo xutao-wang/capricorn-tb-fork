@@ -84,7 +84,7 @@ class PreparationTests(unittest.TestCase):
             firebase = json.loads((out / 'firebase/firebase.json').read_text())
             self.assertEqual(firebase['firestore']['database'], 'capricorn-dev')
             self.assertEqual(firebase['hosting']['site'], 'capricorn-njms-tb-image-study')
-            self.assertEqual((out / 'firebase' / firebase['hosting']['public']).resolve(), (p.ROOT / 'frontend/build').resolve())
+            self.assertTrue((out / 'firebase' / firebase['hosting']['public']).resolve().is_relative_to((out / 'firebase').resolve()), 'Firebase CLI refuses a public folder outside its config/project root')
 
     def test_replace_requires_unchanged_generated_tree(self):
         p = self.module()

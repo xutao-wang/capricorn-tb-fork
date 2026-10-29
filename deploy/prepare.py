@@ -176,7 +176,7 @@ def generate(c, output, replace=False):
         firebase.mkdir()
         (firebase / 'firestore.rules').write_text(rules(c['allowed_emails']))
         write_json(firebase / 'firebase.json', {'firestore': {'database':c['database_id'], 'rules':'firestore.rules'},
-            'hosting': {'site': c['hosting_site'], 'public':os.path.relpath(ROOT / 'frontend/build', output / 'firebase'),
+            'hosting': {'site': c['hosting_site'], 'public':'public',
                 'ignore':['firebase.json','**/.*','**/node_modules/**'],
                 'rewrites':[{'source':'**','destination':'/index.html'}]}})
         write_json(stage / 'review.json', {'project':c['project_id'], 'runtime_identities':identities,

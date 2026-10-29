@@ -2,7 +2,7 @@
 
 This checkout extends [terell/capricorn-tb-fork](https://github.com/terell/capricorn-tb-fork) for the existing `njms-tb-image-study` deployment. It turns a chest X-ray or selected CT slice into **draft image observations**, requires a person to review them, then combines the confirmed findings with supplied clinical notes to search PubMed Central literature and synthesize cited research evidence.
 
-The TB upgrade is prepared locally. Cloud deployment and an additional $20 setup/test budget still require final approval. The current hosted URL is https://capricorn-njms-tb-image-study.web.app; until that upgrade is deployed, it serves the earlier application.
+The TB upgrade is deployed and technically verified at **https://capricorn-njms-tb-image-study.web.app**. The additional $20 setup/test budget was approved; conservative reservations total $9.80, not a final provider bill. See [deployment status](docs/tb-deployment-status-2026-10-28.md) for live checks, limits and rollback.
 
 ```mermaid
 flowchart LR
@@ -29,9 +29,9 @@ npm ci --ignore-scripts
 npm start
 ```
 
-Open http://localhost:3000 and sign in with `xw488@gcp.rutgers.edu`. Use port 3000 because it is an approved backend origin. Stop the local server with Ctrl+C.
+The prepared development server is already running at http://localhost:3000. When starting it again in your own terminal, use the commands above and stop that terminal’s server with Ctrl+C. Sign in with `xw488@gcp.rutgers.edu`. Use port 3000 because it is an approved backend origin. Stop the local server with Ctrl+C.
 
-The frontend uses the configured cloud backends; running it locally does not make model or literature operations free. `.env.development.local` and `.env.production.local` contain the current Firebase web configuration and function URLs. The new image endpoint remains unset until it is deployed, and an unset endpoint shows an error before sending a request. Copy `.env.example` only when configuring another checkout; retain the actual prepared local files here. No service-account key is needed.
+The frontend uses the configured cloud backends; running it locally does not make model or literature operations free. `.env.development.local` and `.env.production.local` contain the current Firebase web configuration and function URLs. All ten actual protected endpoints, including image analysis, are configured. An unset endpoint in another checkout shows an error before sending a request. Copy `.env.example` only when configuring another checkout; retain the actual prepared local files here. No service-account key is needed.
 
 ## Supported image input
 
@@ -56,7 +56,7 @@ cp deploy/config.example.toml deploy/config.local.toml
 python3.12 deploy/prepare.py --config deploy/config.local.toml
 ```
 
-Review `.deploy/REVIEW-PLAN.md` and `.deploy/review.json`. An existing output is preserved unless `--replace` is explicit, and replacement is refused if any active state, unknown file or local edit is present. Choose a fresh output directory instead of deleting deployment state. All actual env files, local config and `.deploy/` are ignored by Git.
+Review `.deploy/REVIEW-PLAN.md` and `.deploy/review.json`. After the actual-configured build is reviewed, stage `frontend/build` inside `.deploy/firebase/public` before Hosting deployment; Firebase requires public assets to stay within its config/project directory. An existing output is preserved unless `--replace` is explicit, and replacement is refused if any active state, unknown file or local edit is present. Choose a fresh output directory instead of deleting deployment state. All actual env files, local config and `.deploy/` are ignored by Git.
 
 The upgrade reuses the existing project, nine function identities, Firebase app/site, database, BigQuery datasets/connection/embedding model, source bucket, repository and build identity. It adds only the image function and runtime account `capricorn-dev-fn-10`, grants that account Vertex access plus the existing minimal Firebase verifier role, and creates only a missing `tuberculosis` specialty. No existing data loader, database creation or embedding-model replacement is part of this upgrade.
 
@@ -67,7 +67,7 @@ The upgrade reuses the existing project, nine function identities, Firebase app/
 | Final synthesis | `gemini-3.1-pro-preview` |
 | Existing BigQuery embedding model | `text-embedding-005` |
 
-Model proposals were checked against [Google’s model lifecycle](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions) and [Gemini 3.8 Flash documentation](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash). Live access is verified only after cloud approval.
+Model proposals were checked against [Google’s model lifecycle](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions) and [Gemini 3.8 Flash documentation](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash). The synthetic live image, extraction, one-candidate retrieval and final-synthesis checks passed after approval.
 
 Functions use minimum 0, maximum 1 instance, concurrency 1 and timeout 540 seconds. The image function has 1 GiB memory; others 512 MiB. One displayed/scored article maximum and a 150 GB per-query ceiling are enforced in code. The fork's deterministic journal ranking and candidate formula `min(max(n, int(n*1.4)), 25)` are preserved. The current citation table covers only three earlier test PMIDs, so missing citation counts do not establish lack of citations. These limits are not a provider-enforced dollar cap.
 
